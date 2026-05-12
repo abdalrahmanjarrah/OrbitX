@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-space-dark: #0a0b16;
+  --color-space-card: rgba(20, 22, 43, 0.6);
+  --color-space-purple: #818cf8;
+  --color-space-blue: #38bdf8;
+  --color-space-accent: #e879f9;
+  
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-space-dark);
+  color: #f8fafc;
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Atmospheric Background - Soft Space */
+.atmosphere-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: 
+    radial-gradient(circle at 15% 40%, rgba(129, 140, 248, 0.12) 0%, transparent 60%),
+    radial-gradient(circle at 85% 60%, rgba(232, 121, 249, 0.08) 0%, transparent 60%);
+  filter: blur(80px);
+}
+
+/* Soft Glassmorphism */
+.glass {
+  background: rgba(20, 22, 43, 0.4);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(129, 140, 248, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+.glass-hover:hover {
+  background: rgba(30, 33, 63, 0.5);
+  border-color: rgba(129, 140, 248, 0.25);
+}
+
+/* Star background effect */
+.stars-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background: radial-gradient(ellipse at bottom, #0f1123 0%, #0a0b16 100%);
+  overflow: hidden;
+}
+
+.star {
+  position: absolute;
+  background: #f8fafc;
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: twinkle var(--duration) infinite ease-in-out;
+  box-shadow: 0 0 4px #e879f9, 0 0 10px #818cf8;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+@keyframes bio-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.98); }
+  50% { opacity: 0.6; transform: scale(1.02); }
+}
+
+.animate-bio-pulse {
+  animation: bio-pulse 1s ease-in-out infinite;
+}
+
+/* Custom scrollbar - Soft Space */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0b16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #312e81;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4338ca;
+}
+
+/* Custom scrollbar and masks */
+.mask-edges {
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
