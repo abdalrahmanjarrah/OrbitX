@@ -1,14 +1,14 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import {defineConfig, loadEnv} from 'vite';
+
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    // اضف هذا السطر واكتب اسم الـ Repository بين السلاشين / /
-    base: '/OrbitX/', 
+    base: '/OrbitX/',
     plugins: [
       react(), 
       tailwindcss(),
@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
           ]
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024 // 10MB
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024
         }
       })
     ],
