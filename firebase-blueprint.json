@@ -1,0 +1,574 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and stats",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "photoURL": {
+          "type": "string"
+        },
+        "bio": {
+          "type": "string"
+        },
+        "level": {
+          "type": "number"
+        },
+        "xp": {
+          "type": "number"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "admin",
+            "user"
+          ]
+        },
+        "hearts": {
+          "type": "number"
+        },
+        "friendsCount": {
+          "type": "number"
+        },
+        "banned": {
+          "type": "boolean"
+        },
+        "currentActivity": {
+          "type": "string"
+        },
+        "coins": {
+          "type": "number"
+        },
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "equippedItems": {
+          "type": "object",
+          "properties": {
+            "suit": {
+              "type": "string"
+            },
+            "head": {
+              "type": "string"
+            },
+            "accessory": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "photoURL",
+        "level",
+        "xp",
+        "role",
+        "hearts"
+      ]
+    },
+    "Friend": {
+      "title": "Friend",
+      "description": "Friend relationship",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ScheduleItem": {
+      "title": "ScheduleItem",
+      "description": "User's study schedule item",
+      "type": "object",
+      "properties": {
+        "day": {
+          "type": "string"
+        },
+        "time": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "day",
+        "time",
+        "task",
+        "userId"
+      ]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Study room station",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "creatorId": {
+          "type": "string"
+        },
+        "creatorName": {
+          "type": "string"
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxParticipants": {
+          "type": "number"
+        },
+        "timerStatus": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "focus",
+            "break"
+          ]
+        },
+        "timerDuration": {
+          "type": "number"
+        },
+        "breakDuration": {
+          "type": "number"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dailyUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "task",
+        "creatorId",
+        "creatorName",
+        "participants",
+        "maxParticipants",
+        "timerStatus",
+        "timerDuration",
+        "breakDuration",
+        "createdAt"
+      ]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "userPhoto": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "text",
+            "image",
+            "video",
+            "file"
+          ]
+        },
+        "fileUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "userId",
+        "userName",
+        "timestamp",
+        "type"
+      ]
+    },
+    "Advice": {
+      "title": "Advice",
+      "description": "Admin advice of the day",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "adminId": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "text",
+        "adminId",
+        "timestamp"
+      ]
+    },
+    "Exhibition": {
+      "title": "Exhibition",
+      "description": "User uploaded image in gallery",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "url",
+        "userId",
+        "userName",
+        "timestamp"
+      ]
+    },
+    "Suggestion": {
+      "title": "Suggestion",
+      "description": "User suggestion",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reply": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "userId",
+        "userName",
+        "timestamp"
+      ]
+    },
+    "Discussion": {
+      "title": "Discussion",
+      "description": "Forum discussion thread",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "userPhoto": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "repliesCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "content",
+        "userId",
+        "userName",
+        "userPhoto",
+        "timestamp",
+        "repliesCount"
+      ]
+    },
+    "Reply": {
+      "title": "Reply",
+      "description": "Discussion reply",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "userPhoto": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "text",
+        "userId",
+        "userName",
+        "userPhoto",
+        "timestamp"
+      ]
+    },
+    "Challenge": {
+      "title": "Challenge",
+      "description": "User challenge",
+      "type": "object",
+      "properties": {
+        "challengerId": {
+          "type": "string"
+        },
+        "challengerName": {
+          "type": "string"
+        },
+        "challengedId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "declined"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "challengerId",
+        "challengerName",
+        "challengedId",
+        "status",
+        "createdAt"
+      ]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Publicly visible user profile information (no PII)",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "photoURL": {
+          "type": "string"
+        },
+        "bio": {
+          "type": "string"
+        },
+        "level": {
+          "type": "number"
+        },
+        "xp": {
+          "type": "number"
+        },
+        "friendsCount": {
+          "type": "number"
+        },
+        "hearts": {
+          "type": "number"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "admin",
+            "user"
+          ]
+        },
+        "banned": {
+          "type": "boolean"
+        },
+        "currentActivity": {
+          "type": "string"
+        },
+        "coins": {
+          "type": "number"
+        },
+        "equippedItems": {
+          "type": "object",
+          "properties": {
+            "suit": {
+              "type": "string"
+            },
+            "head": {
+              "type": "string"
+            },
+            "accessory": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "photoURL",
+        "level",
+        "xp",
+        "role"
+      ]
+    },
+    "AwarenessSignal": {
+      "title": "AwarenessSignal",
+      "description": "Classified awareness post",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "authorId": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "views": {
+          "type": "number"
+        },
+        "likes": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "content",
+        "category",
+        "authorId",
+        "timestamp",
+        "views",
+        "likes"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles (Private, contains PII)"
+    },
+    "/profiles/{uid}": {
+      "schema": "PublicProfile",
+      "description": "Public user profiles (No PII)"
+    },
+    "/users/{uid}/friends/{friendId}": {
+      "schema": "Friend",
+      "description": "User friends list"
+    },
+    "/users/{uid}/schedule/{itemId}": {
+      "schema": "ScheduleItem",
+      "description": "User study schedules"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Study rooms"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Room-specific chat messages"
+    },
+    "/advices/{adviceId}": {
+      "schema": "Advice",
+      "description": "Admin advices"
+    },
+    "/exhibitions/{exhibitionId}": {
+      "schema": "Exhibition",
+      "description": "Global exhibition gallery"
+    },
+    "/suggestions/{suggestionId}": {
+      "schema": "Suggestion",
+      "description": "User suggestions"
+    },
+    "/global_chat/{messageId}": {
+      "schema": "Message",
+      "description": "Global chat messages"
+    },
+    "/discussions/{discussionId}": {
+      "schema": "Discussion",
+      "description": "Forum discussions"
+    },
+    "/discussions/{discussionId}/replies/{replyId}": {
+      "schema": "Reply",
+      "description": "Discussion replies"
+    },
+    "/challenges/{challengeId}": {
+      "schema": "Challenge",
+      "description": "User challenges"
+    },
+    "/awareness_signals/{signalId}": {
+      "schema": {
+        "$ref": "#/entities/AwarenessSignal"
+      },
+      "description": "Awareness signals"
+    }
+  }
+}

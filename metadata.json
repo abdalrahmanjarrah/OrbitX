@@ -1,0 +1,8 @@
+{
+  "name": "OrbitX",
+  "description": "منصة الدراسة الجماعية في الفضاء - ادرس مع أصدقائك في بيئة فضائية ملهمة مع نظام بومودورو وتفاعل حقيقي.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

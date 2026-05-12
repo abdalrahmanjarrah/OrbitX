@@ -1,0 +1,522 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - displayName: string (required, 1-100 chars)
+    //   - email: string (required, immutable, PII)
+    //   - photoURL: string (required, URL)
+    //   - bio: string (optional, 0-500 chars)
+    //   - level: number (required, positive)
+    //   - xp: number (required, positive)
+    //   - role: string (required, enum: ['admin', 'user'])
+    //   - hearts: number (required, 0-3)
+    //   - friendsCount: number (optional, positive)
+    //   - banned: boolean (optional)
+    //   - currentActivity: string (optional, 0-100 chars)
+    //
+    // Collection: users/{uid}/friends
+    // Document ID: {friendId}
+    // Fields:
+    //   - timestamp: timestamp (required)
+    //
+    // Collection: users/{uid}/schedule
+    // Document ID: {itemId}
+    // Fields:
+    //   - day: string (required)
+    //   - time: string (required)
+    //   - task: string (required)
+    //   - userId: string (required, immutable)
+    //
+    // Collection: rooms
+    // Document ID: {roomId}
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - task: string (required, 1-200 chars)
+    //   - creatorId: string (required, immutable)
+    //   - creatorName: string (required)
+    //   - participants: list (required, strings)
+    //   - maxParticipants: number (required)
+    //   - timerStatus: string (required, enum: ['idle', 'focus', 'break'])
+    //   - timerDuration: number (required)
+    //   - breakDuration: number (required)
+    //   - startTime: timestamp (optional)
+    //   - createdAt: timestamp (required, immutable)
+    //   - dailyUrl: string (optional, URL)
+    //
+    // Collection: rooms/{roomId}/messages
+    // Document ID: {messageId}
+    // Fields:
+    //   - text: string (required, 1-1000 chars)
+    //   - userId: string (required, immutable)
+    //   - userName: string (required)
+    //   - userPhoto: string (optional)
+    //   - timestamp: timestamp (required, immutable)
+    //   - type: string (required, enum: ['text', 'image', 'video', 'file'])
+    //   - fileUrl: string (optional)
+    //
+    // Collection: advices
+    // Document ID: {adviceId}
+    // Fields:
+    //   - text: string (required, 1-500 chars)
+    //   - adminId: string (required, immutable)
+    //   - timestamp: timestamp (required, immutable)
+    //
+    // Collection: exhibitions
+    // Document ID: {exhibitionId}
+    // Fields:
+    //   - url: string (required, URL)
+    //   - userId: string (required, immutable)
+    //   - userName: string (required)
+    //   - timestamp: timestamp (required, immutable)
+    //
+    // Collection: suggestions
+    // Document ID: {suggestionId}
+    // Fields:
+    //   - text: string (required, 1-1000 chars)
+    //   - userId: string (required, immutable)
+    //   - userName: string (required)
+    //   - timestamp: timestamp (required, immutable)
+    //   - reply: string (optional, 0-1000 chars)
+    //
+    // Collection: global_chat
+    // Document ID: {messageId}
+    // Fields:
+    //   - text: string (required, 1-1000 chars)
+    //   - userId: string (required, immutable)
+    //   - userName: string (required)
+    //   - userPhoto: string (optional)
+    //   - timestamp: timestamp (required, immutable)
+    //   - type: string (required, enum: ['text', 'image', 'video', 'file'])
+    //
+    // Collection: discussions
+    // Document ID: {discussionId}
+    // Fields:
+    //   - title: string (required, 1-200 chars)
+    //   - content: string (required, 1-5000 chars)
+    //   - userId: string (required, immutable)
+    //   - userName: string (required)
+    //   - userPhoto: string (optional)
+    //   - timestamp: timestamp (required, immutable)
+    //   - repliesCount: number (required)
+    //
+    // Collection: discussions/{discussionId}/replies
+    // Document ID: {replyId}
+    // Fields:
+    //   - text: string (required, 1-2000 chars)
+    //   - userId: string (required, immutable)
+    //   - userName: string (required)
+    //   - userPhoto: string (optional)
+    //   - timestamp: timestamp (required, immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isNotBanned() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.banned == false;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin') ||
+        ('email' in request.auth.token && (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com"))
+      );
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url == null || (url is string && url.size() <= 800000 && (url == "" || url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:.*")));
+    }
+
+    function isRecent(ts) {
+      return ts is timestamp && math.abs(request.time.toMillis() - ts.toMillis()) < 5 * 60 * 1000;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() > 0 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             isValidEmail(data.email) &&
+             isValidUrl(data.photoURL) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             data.level is number && data.level >= 1 &&
+             data.xp is number && data.xp >= 0 &&
+             data.role in ['admin', 'user'] &&
+             data.hearts is number && data.hearts >= 0 && data.hearts <= 3 &&
+             (!('friendsCount' in data) || (data.friendsCount is number && data.friendsCount >= 0)) &&
+             (!('banned' in data) || data.banned is bool) &&
+             (!('currentActivity' in data) || (data.currentActivity is string && data.currentActivity.size() <= 100)) &&
+             (!('coins' in data) || (data.coins is number && data.coins >= 0)) &&
+             (!('inventory' in data) || data.inventory is list) &&
+             (!('equippedItems' in data) || data.equippedItems is map) &&
+             (!('missionRole' in data) || (data.missionRole is string && data.missionRole.size() <= 100)) &&
+             (!('totalFocusSessions' in data) || data.totalFocusSessions is number) &&
+             (!('seeds' in data) || data.seeds is number) &&
+             (!('lastStudyDate' in data) || data.lastStudyDate is string) &&
+             (!('plants' in data) || data.plants is list) &&
+             (!('badges' in data) || data.badges is list) &&
+             (!('streak' in data) || data.streak is number);
+    }
+
+    function isValidPublicProfile(data) {
+      return data.uid is string && data.uid.size() > 0 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             isValidUrl(data.photoURL) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             data.level is number && data.level >= 1 &&
+             data.xp is number && data.xp >= 0 &&
+             (!('friendsCount' in data) || (data.friendsCount is number && data.friendsCount >= 0)) &&
+             data.hearts is number && data.hearts >= 0 && data.hearts <= 3 &&
+             data.role in ['admin', 'user'] &&
+             (!('banned' in data) || data.banned is bool) &&
+             (!('currentActivity' in data) || (data.currentActivity is string && data.currentActivity.size() <= 100)) &&
+             (!('coins' in data) || (data.coins is number && data.coins >= 0)) &&
+             (!('inventory' in data) || data.inventory is list) &&
+             (!('equippedItems' in data) || data.equippedItems is map) &&
+             (!('missionRole' in data) || (data.missionRole is string && data.missionRole.size() <= 100)) &&
+             (!('totalFocusSessions' in data) || data.totalFocusSessions is number) &&
+             (!('seeds' in data) || data.seeds is number) &&
+             (!('lastStudyDate' in data) || data.lastStudyDate is string) &&
+             (!('plants' in data) || data.plants is list) &&
+             (!('badges' in data) || data.badges is list) &&
+             (!('streak' in data) || data.streak is number);
+    }
+
+    function isValidRoom(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.task is string && data.task.size() >= 1 && data.task.size() <= 200 &&
+             data.creatorId is string &&
+             data.creatorName is string &&
+             data.participants is list &&
+             data.maxParticipants is number &&
+             data.timerStatus in ['idle', 'focus', 'break'] &&
+             data.timerDuration is number &&
+             data.breakDuration is number &&
+             (!('startTime' in data) || data.startTime is timestamp) &&
+             data.createdAt is timestamp &&
+             (!('dailyUrl' in data) || isValidUrl(data.dailyUrl));
+    }
+
+    function isValidMessage(data) {
+      return data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+             data.userId is string &&
+             data.userName is string &&
+             (!('userPhoto' in data) || isValidUrl(data.userPhoto)) &&
+             data.timestamp is timestamp &&
+             data.type in ['text', 'image', 'video', 'file'] &&
+             (!('fileUrl' in data) || isValidUrl(data.fileUrl));
+    }
+
+    function isValidAwarenessSignal(data) {
+      return data.keys().hasAll(['title', 'content', 'category', 'authorId', 'timestamp', 'views', 'likes']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.category is string &&
+             data.views is number &&
+             data.likes is number;
+    }
+
+    function isValidDiscussion(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 5000 &&
+             data.userId is string &&
+             data.userName is string &&
+             (!('userPhoto' in data) || isValidUrl(data.userPhoto)) &&
+             data.timestamp is timestamp &&
+             data.repliesCount is number && data.repliesCount >= 0;
+    }
+
+    function isValidChallenge(data) {
+      return data.challengerId is string &&
+             data.challengerName is string &&
+             data.challengedId is string &&
+             data.status in ['pending', 'accepted', 'declined'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Restrict read to owner/admin because it contains email (PII)
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isOwner(userId) && 
+                      isValidUser(request.resource.data) && 
+                      (request.resource.data.get('role', 'user') == 'user' || 
+                       (request.resource.data.get('role', 'user') == 'admin' && 
+                        (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com") && 
+                        request.auth.token.email_verified == true)) &&
+                      isRecent(request.time);
+                      
+      allow update: if (isOwner(userId) && 
+                        isValidUser(request.resource.data) && 
+                        request.resource.data.get('role', 'user') == resource.data.get('role', 'user') && // Cannot change role
+                        request.resource.data.email == resource.data.email && // Cannot change email
+                        request.resource.data.uid == resource.data.uid) || 
+                      isAdmin();
+
+      match /friends/{friendId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
+      }
+
+      match /schedule/{itemId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isAuthenticated() && isNotBanned();
+        allow update: if isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+    }
+
+    match /profiles/{userId} {
+      // Public profiles are readable by any authenticated user
+      allow read: if isAuthenticated();
+      
+      // Only the owner can create/update their public profile
+      allow create: if isOwner(userId) && 
+                      isValidPublicProfile(request.resource.data) &&
+                      isRecent(request.time);
+                      
+      allow update: if (isOwner(userId) && 
+                        isValidPublicProfile(request.resource.data) &&
+                        request.resource.data.uid == resource.data.uid) || 
+                      isAdmin();
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && 
+                      isValidRoom(request.resource.data) && 
+                      request.resource.data.get('creatorId', '') == request.auth.uid &&
+                      (request.resource.data.createdAt == request.time || isRecent(request.resource.data.createdAt));
+      allow update: if (isAuthenticated() && 
+                        isValidRoom(request.resource.data) && 
+                        (
+                          // Creator can update everything
+                          request.auth.uid == resource.data.get('creatorId', '') || 
+                          // Participants can ONLY update the participants list (join/leave)
+                          (
+                            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants']) &&
+                            (
+                              // Joining: Only adding self
+                              (
+                                request.resource.data.participants.hasAll(resource.data.participants) &&
+                                request.resource.data.participants.size() == resource.data.participants.size() + 1 &&
+                                request.auth.uid in request.resource.data.participants &&
+                                !(request.auth.uid in resource.data.participants) &&
+                                request.resource.data.participants.size() <= resource.data.maxParticipants
+                              ) ||
+                              // Leaving: Only removing self
+                              (
+                                resource.data.participants.hasAll(request.resource.data.participants) &&
+                                resource.data.participants.size() == request.resource.data.participants.size() + 1 &&
+                                !(request.auth.uid in request.resource.data.participants) &&
+                                request.auth.uid in resource.data.participants
+                              )
+                            )
+                          )
+                        )) || 
+                      isAdmin();
+      allow delete: if (isAuthenticated() && request.auth.uid == resource.data.creatorId) || isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isNotBanned() && 
+                        isValidMessage(request.resource.data) && 
+                        request.resource.data.userId == request.auth.uid &&
+                        isRecent(request.resource.data.timestamp);
+        allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+      }
+
+      match /signals/{signalId} {
+        allow read: if isAuthenticated() && (resource.data.receiver == request.auth.uid || resource.data.sender == request.auth.uid);
+        allow create: if isAuthenticated() && isNotBanned() && request.resource.data.sender == request.auth.uid;
+        allow delete: if isAuthenticated() && (resource.data.receiver == request.auth.uid || resource.data.sender == request.auth.uid);
+      }
+    }
+
+    match /advices/{adviceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /exhibitions/{exhibitionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && 
+                      hasRequiredFields(['url', 'userId', 'userName', 'timestamp']) &&
+                      isValidUrl(request.resource.data.url) &&
+                      request.resource.data.userId == request.auth.uid &&
+                      isRecent(request.resource.data.timestamp);
+      allow delete: if isAdmin();
+    }
+
+    match /suggestions/{suggestionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && 
+                      hasRequiredFields(['text', 'userId', 'userName', 'timestamp']) &&
+                      request.resource.data.text.size() <= 1000 &&
+                      request.resource.data.userId == request.auth.uid &&
+                      isRecent(request.resource.data.timestamp);
+      allow update: if (isAuthenticated() && request.auth.uid == resource.data.userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto'])) || isAdmin();
+      allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+    }
+
+    match /global_chat/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && 
+                      isValidMessage(request.resource.data) && 
+                      request.resource.data.userId == request.auth.uid &&
+                      isRecent(request.resource.data.timestamp);
+      allow update: if isAuthenticated() && 
+                      request.auth.uid == resource.data.userId && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto']);
+      allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+    }
+
+    match /awareness_signals/{signalId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidAwarenessSignal(request.resource.data) && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'likes']);
+      allow delete: if isAdmin();
+    }
+
+    match /discussions/{discussionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && 
+                      isValidDiscussion(request.resource.data) && 
+                      request.resource.data.userId == request.auth.uid &&
+                      isRecent(request.resource.data.timestamp);
+      allow update: if isAuthenticated() && 
+                      request.auth.uid == resource.data.userId && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto']);
+      allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+
+      match /replies/{replyId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isNotBanned() && 
+                        hasRequiredFields(['text', 'userId', 'userName', 'userPhoto', 'timestamp']) &&
+                        request.resource.data.text.size() <= 2000 &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isRecent(request.resource.data.timestamp);
+        allow update: if isAuthenticated() && 
+                        request.auth.uid == resource.data.userId && 
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto']);
+        allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+      }
+    }
+
+    function isValidFleet(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.description is string && data.description.size() <= 500 &&
+             data.ownerId is string &&
+             data.members is list && data.members.size() <= 10 &&
+             (!('coAdmins' in data) || (data.coAdmins is list && data.coAdmins.size() <= 5)) &&
+             data.totalFocusHours is number &&
+             data.xp is number &&
+             data.createdAt is timestamp;
+    }
+
+    match /fleets/{fleetId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() &&
+                      isValidFleet(request.resource.data) &&
+                      request.resource.data.ownerId == request.auth.uid &&
+                      request.resource.data.members.hasAll([request.auth.uid]) &&
+                      isRecent(request.resource.data.createdAt);
+      allow update: if isAuthenticated() && isNotBanned() &&
+                      isValidFleet(request.resource.data) &&
+                      (
+                        // Owner can update anything (?) Wait, mostly members, just allow members to update xp/hours
+                        (request.auth.uid in resource.data.members && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['xp', 'totalFocusHours'])) ||
+                        // Adding/removing members
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
+                          (
+                            // Join
+                            (request.resource.data.members.size() == resource.data.members.size() + 1 && request.auth.uid in request.resource.data.members && !(request.auth.uid in resource.data.members)) ||
+                            // Leave
+                            (resource.data.members.size() == request.resource.data.members.size() + 1 && !(request.auth.uid in request.resource.data.members) && request.auth.uid in resource.data.members) ||
+                            // Owner kicks member
+                            (request.auth.uid == resource.data.ownerId)
+                          )
+                        )
+                      );
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.ownerId;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && (request.auth.uid in get(/databases/$(database)/documents/fleets/$(fleetId)).data.members);
+        allow create: if isAuthenticated() && isNotBanned() &&
+                        (request.auth.uid in get(/databases/$(database)/documents/fleets/$(fleetId)).data.members) &&
+                        isValidMessage(request.resource.data) &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isRecent(request.resource.data.timestamp);
+        allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+      }
+    }
+
+    match /challenges/{challengeId} {
+      allow read: if isAuthenticated() && (resource.data.challengerId == request.auth.uid || resource.data.challengedId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isNotBanned() && 
+                      isValidChallenge(request.resource.data) &&
+                      request.resource.data.challengerId == request.auth.uid &&
+                      isRecent(request.resource.data.createdAt);
+      allow update: if isAuthenticated() &&
+                      isValidChallenge(request.resource.data) &&
+                      request.resource.data.challengedId == request.auth.uid &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+    }
+
+    match /worlds/{worldId} {
+      allow read: if isAuthenticated();
+      
+      match /items/{itemId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isOwner(worldId) || isAdmin();
+      }
+      
+      match /players/{playerId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(playerId) || isAdmin();
+      }
+    }
+  }
+}
