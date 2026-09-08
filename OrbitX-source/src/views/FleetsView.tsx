@@ -198,6 +198,7 @@ export default function FleetsView({ user }: { user: UserData }) {
   const [newMsg, setNewMsg] = useState("");
   const [invitedFleets, setInvitedFleets] = useState<Fleet[]>([]);
   const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
+  const [fleetToJoin, setFleetToJoin] = useState<Fleet | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -410,11 +411,36 @@ export default function FleetsView({ user }: { user: UserData }) {
   };
 
   const handleJoinFleet = async (fleetId: string) => {
+    if (fleetToJoin) return;
+    const target = allFleets.find((f) => f.id === fleetId);
+    setFleetToJoin(target || null);
+  };
+
+  const confirmJoinFleet = async (fleetId: string) => {
+    setFleetToJoin(null);
+    const currentFleetId = user.fleetId;
     try {
-      await updateDoc(doc(db, "fleets", fleetId), {
+      const batch = writeBatch(db);
+      // If joining from an existing fleet, remove the user from the old fleet
+      // (both members and co-admins) so they don't stay in two fleets at once.
+      if (currentFleetId && currentFleetId !== fleetId) {
+        const oldRef = doc(db, "fleets", currentFleetId);
+        batch.update(oldRef, {
+          members: arrayRemove(user.uid),
+          coAdmins: arrayRemove(user.uid),
+        });
+      }
+      batch.update(doc(db, "fleets", fleetId), {
         members: arrayUnion(user.uid),
       });
-      await updateDoc(doc(db, "users", user.uid), { fleetId });
+      batch.update(doc(db, "users", user.uid), { fleetId });
+      await batch.commit();
+      showToast(
+        isAr
+          ? "انضممت إلى الأسطول بنجاح! 🚀"
+          : "You joined the fleet successfully! 🚀",
+        "success",
+      );
     } catch (e) {}
   };
 
@@ -1074,6 +1100,66 @@ export default function FleetsView({ user }: { user: UserData }) {
           </div>
         </div>
       </div>
+
+      {/* Join confirmation — switching fleets is destructive */}
+      <AnimatePresence>
+        {fleetToJoin && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setFleetToJoin(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0f1123]/95 border border-fuchsia-500/30 rounded-3xl p-6 max-w-md w-full shadow-[0_0_60px_rgba(168,85,247,0.25)]"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/30">
+                  <Rocket size={22} className="text-fuchsia-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    {isAr ? "تأكيد الانضمام؟" : "Confirm joining?"}
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    {fleetToJoin.name}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-300 leading-relaxed mb-6">
+                {isAr
+                  ? user.fleetId && user.fleetId !== fleetToJoin.id
+                    ? `ستخرج من أسطولك الحالي وتنتقل إلى "${fleetToJoin.name}". هل أنت متأكد؟`
+                    : "سيتم إضافتك إلى الأسطول. هل أنت متأكد؟"
+                  : user.fleetId && user.fleetId !== fleetToJoin.id
+                    ? `You will leave your current fleet and move to "${fleetToJoin.name}". Are you sure?`
+                    : "You will be added to the fleet. Are you sure?"}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => confirmJoinFleet(fleetToJoin.id)}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-l from-fuchsia-500 to-indigo-600 text-white font-bold hover:brightness-110 transition-all cursor-pointer"
+                >
+                  {isAr ? "نعم، انضم" : "Yes, join"}
+                </button>
+                <button
+                  onClick={() => setFleetToJoin(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/10 text-gray-300 font-bold hover:bg-white/20 transition-all cursor-pointer"
+                >
+                  {isAr ? "تراجع" : "Cancel"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

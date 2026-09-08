@@ -637,7 +637,12 @@ export default function UserModal({
                     <div className="absolute inset-0 bg-slate-900/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <span className="text-xs font-bold">
                         {ex.timestamp
-                          ? new Date(ex.timestamp.toDate()).toLocaleDateString(
+                          ? new Date(
+                              typeof (ex.timestamp as any).toDate ===
+                                "function"
+                                ? (ex.timestamp as any).toDate()
+                                : (ex.timestamp as any),
+                            ).toLocaleDateString(
                               "ar-EG",
                             )
                           : ""}

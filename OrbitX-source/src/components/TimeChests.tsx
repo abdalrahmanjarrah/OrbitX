@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Timer, Lock, CheckCircle, Gift } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getChestState, claimChest, CHEST_CONFIG } from "../lib/timeChests";
 import { useLanguage } from "../context/LanguageContext";
 import type { UserData } from "../shared";
 import { cn } from "../lib/utils";
+import { showToast } from "../lib/cosmicUI";
 
 function formatTime(ms: number): string {
   const totalSec = Math.ceil(ms / 1000);
@@ -58,25 +59,68 @@ export function TimeChests({ user }: TimeChestsProps) {
   const [state, setState] = useState(() => getChestState(user));
   const [claiming, setClaiming] = useState<number | null>(null);
   const [showReward, setShowReward] = useState<{ xp: number; icon: string } | null>(null);
+  // When the server-side force-grant throttle rejects a chest that is locally
+  // ready (anti-farm keeps grants 60s apart), we schedule an automatic retry.
+  const [retryQueue, setRetryQueue] = useState<number[]>([]);
+  const [retryIn, setRetryIn] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => setState(getChestState(user)), 1000);
     return () => clearInterval(interval);
   }, [user]);
 
-  const handleClaim = useCallback(async (i: number) => {
-    if (claiming !== null) return;
-    setClaiming(i);
+  const tryClaim = useCallback(async (i: number) => {
     const granted = await claimChest(i, user);
-    setClaiming(null);
     if (granted > 0) {
       setShowReward({ xp: CHEST_CONFIG[i].xp, icon: CHEST_CONFIG[i].icon });
       setState(getChestState(user));
       setTimeout(() => setShowReward(null), 2500);
+      return true;
     }
-  }, [user, claiming]);
+    return false;
+  }, [user]);
+
+  const handleClaim = useCallback(async (i: number) => {
+    if (claiming !== null) return;
+    setClaiming(i);
+    const ok = await tryClaim(i);
+    if (!ok) {
+      // The chest is locally "ready" but the server throttled the grant.
+      // Queue it and let the countdown below retry it automatically.
+      setRetryQueue((q) => (q.includes(i) ? q : [...q, i]));
+      setRetryIn(61);
+      showToast(
+        isAr
+          ? "تم تأجيل الصندوق لحظة — سيفتح تلقائياً خلال دقيقة."
+          : "Chest deferred — it will open automatically in about a minute.",
+        "info",
+      );
+    }
+    setClaiming(null);
+  }, [claiming, tryClaim, isAr]);
+
+  // Auto-retry countdown for throttled chests.
+  useEffect(() => {
+    if (retryQueue.length === 0) return;
+    if (retryIn <= 0) {
+      const current = retryQueue[0];
+      setRetryIn(0);
+      tryClaim(current).then((ok) => {
+        if (ok) {
+          setRetryQueue((q) => q.slice(1));
+          setState(getChestState(user));
+        } else {
+          setRetryIn(61);
+        }
+      });
+      return;
+    }
+    const timeout = setTimeout(() => setRetryIn((v) => v - 1), 1000);
+    return () => clearTimeout(timeout);
+  }, [retryQueue, retryIn, tryClaim]);
 
   const nextLockedIdx = state.statuses.findIndex((s) => s === "locked");
+  const retrying = retryQueue.length > 0;
 
   return (
     <div className="relative rounded-3xl bg-gradient-to-br from-[#0e1025]/90 to-[#141833]/80 backdrop-blur-xl border border-white/5 p-5 overflow-hidden group hover:border-amber-500/30 transition-all">
@@ -135,7 +179,14 @@ export function TimeChests({ user }: TimeChestsProps) {
       </div>
 
       <div className="relative flex items-center justify-between text-[11px]">
-        {state.allClaimed ? (
+        {retrying ? (
+          <span className="font-bold text-amber-400/90 flex items-center gap-1.5">
+            <Gift size={13} className="animate-pulse" />
+            {isAr
+              ? `يفتح الصندوق المعلّق خلال ${retryIn} ث`
+              : `Opening queued chest in ${retryIn}s`}
+          </span>
+        ) : state.allClaimed ? (
           <span className="font-bold text-emerald-400/80 flex items-center gap-1.5">
             <CheckCircle size={13} />
             {isAr ? "أكملت الدورة! تتجدد بعد 24 ساعة" : "Cycle complete! Resets in 24h"}

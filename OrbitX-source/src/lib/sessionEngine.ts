@@ -401,11 +401,18 @@ export function useSessionEngine(
         }, 60000);
       }
     } else {
-      // Do not automatically close the warning when returning; the user must manually dismiss it.
+      // User returned to the tab — stop all penalties and restore XP path immediately.
+      isDistractedRef.current = false;
+      if (fuelLeakIntervalRef.current) {
+        clearInterval(fuelLeakIntervalRef.current);
+        fuelLeakIntervalRef.current = null;
+      }
+      setShowFuelLeak(false);
+      lastXpUpdateTimeRef.current = Date.now() + clockOffsetRef.current;
     }
   }, [stationId, isSpectator]);
 
-  const MAX_XP_PER_SESSION = 120;
+  const MAX_XP_PER_SESSION = 360; // 1 XP per real focus minute → allow up to 6 continuous hours per round.
   const isHost = room ? ((room.hostId || room.creatorId) === user.uid || user.role === "admin") : false;
 
   // Sync stateful refs
@@ -1100,8 +1107,8 @@ export function useSessionEngine(
           false, // Enforce Transaction lock!
         );
 
-        if (result === -1) {
-          // Blocked by cooldown. Rollback state so we retry on subsequent ticks
+        if (result === -1 || result === 0) {
+          // Blocked by cooldown (or no actual grant). Rollback state so we retry on subsequent ticks
           lastXpUpdateTimeRef.current = prevLastXpUpdateTime;
           sessionXpCountRef.current -= xpToGrant;
           return 0;

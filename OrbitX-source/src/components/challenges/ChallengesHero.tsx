@@ -1,7 +1,13 @@
-import React from "react";
-import { Swords, Users, Rocket, Flame, Target, Medal } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Swords, Users, Rocket, Flame, Target, Medal, Pencil, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
+import { useLanguage } from "../../context/LanguageContext";
+import { db } from "../../firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { showToast } from "../../lib/cosmicUI";
+
+const HERO_GIF_DOC = doc(db, "system", "hero_gif");
 
 interface ChallengesHeroProps {
   onStartChallengeClick: () => void;
@@ -10,6 +16,7 @@ interface ChallengesHeroProps {
   activeCount: number;
   invitesCount: number;
   winsCount: number;
+  isAdmin: boolean;
 }
 
 export const ChallengesHero: React.FC<ChallengesHeroProps> = ({
@@ -19,7 +26,82 @@ export const ChallengesHero: React.FC<ChallengesHeroProps> = ({
   activeCount,
   invitesCount,
   winsCount,
+  isAdmin,
 }) => {
+  const { isAr } = useLanguage();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [gifUrl, setGifUrl] = useState<string>("");
+  const [loadingGif, setLoadingGif] = useState(true);
+  const [uploadingGif, setUploadingGif] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    getDoc(HERO_GIF_DOC)
+      .then((snap) => {
+        if (isMounted) setGifUrl(snap.exists() ? snap.data().url || "" : "");
+      })
+      .catch(() => {
+        if (isMounted) setGifUrl("");
+      })
+      .finally(() => {
+        if (isMounted) setLoadingGif(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleGifSelected = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.includes("gif") && !file.type.startsWith("image/")) {
+      showToast(
+        isAr ? "اختر ملف صورة (GIF متحرك يفضل)." : "Choose an image file (animated GIF preferred).",
+        "warning",
+      );
+      return;
+    }
+    const maxBytes = 8 * 1024 * 1024; // 8MB
+    if (file.size > maxBytes) {
+      showToast(
+        isAr ? "الملف كبير جداً — خلي حجمه أقل من 8MB." : "File too large — keep it under 8MB.",
+        "error",
+      );
+      return;
+    }
+    setUploadingGif(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      await setDoc(HERO_GIF_DOC, {
+        url: dataUrl,
+        updatedBy: "admin",
+        updatedAt: serverTimestamp(),
+      });
+      setGifUrl(dataUrl);
+      showToast(
+        isAr ? "تم حفظ GIF النزال بنجاح! 🎥" : "Battle GIF saved successfully! 🎥",
+        "success",
+      );
+    } catch (err) {
+      console.warn("Failed saving battle GIF:", err);
+      showToast(
+        isAr
+          ? "فشل الحفظ — جرّب ملف أصغر."
+          : "Save failed — try a smaller file.",
+        "error",
+      );
+    } finally {
+      setUploadingGif(false);
+    }
+  };
   const stats = [
     { label: "نزالات مشتعلة", value: activeCount, accent: "text-rose-400", dot: "bg-rose-500" },
     { label: "طلبات معلقة", value: invitesCount, accent: "text-amber-400", dot: "bg-amber-500" },
@@ -136,6 +218,74 @@ export const ChallengesHero: React.FC<ChallengesHeroProps> = ({
           <div className="lg:hidden col-span-3" />
         </motion.div>
       </div>
+
+      {/* GIF ساحة النزال — شخصان يتبارزان (الأدمن قادر على تغييره بضغطة) */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.4 }}
+        onClick={() => {
+          if (isAdmin && !uploadingGif) fileInputRef.current?.click();
+        }}
+        className={cn(
+          "relative z-10 mt-6 rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(244,63,94,0.2)] aspect-video md:aspect-[21/9] bg-black",
+          isAdmin && "cursor-pointer group/gif",
+        )}
+      >
+        {loadingGif ? (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-rose-950/40 via-[#12060e] to-amber-950/30">
+            <Loader2 size={28} className="text-rose-400/70 animate-spin" />
+          </div>
+        ) : gifUrl ? (
+          <img
+            src={gifUrl}
+            alt={isAr ? "شخصان يتبارزان في نزال التركيز" : "Two rivals in a focus duel"}
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-rose-300/80 text-sm font-bold bg-gradient-to-br from-rose-950/40 via-[#12060e] to-amber-950/30">
+            <span className="text-4xl">{isAdmin ? "🎥" : "⚔️"}</span>
+            <span>
+              {isAdmin
+                ? isAr
+                  ? "اضغط هنا لاختيار GIF النزال من جهازك"
+                  : "Click here to pick the battle GIF from your device"
+                : isAr
+                  ? "GIF النزال في الطريق قريباً 🚀"
+                  : "Battle GIF coming soon 🚀"}
+            </span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10 pointer-events-none" />
+
+        {isAdmin && (
+          <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur border border-white/15 text-[11px] font-bold text-white group-hover/gif:bg-rose-600/80 group-hover/gif:border-rose-400/50 transition-all">
+              {uploadingGif ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Pencil size={11} />
+              )}
+              {uploadingGif
+                ? isAr
+                  ? "جارٍ الحفظ…"
+                  : "Saving…"
+                : isAr
+                  ? "تغيير الـ GIF"
+                  : "Change GIF"}
+            </span>
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/gif,image/webp,image/*"
+          className="hidden"
+          onChange={handleGifSelected}
+        />
+      </motion.div>
 
       {/* بطاقات شرح القسم - How it works */}
       <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">

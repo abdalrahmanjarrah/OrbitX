@@ -862,7 +862,10 @@ export default function ProfileView({
                         <span className="text-[10px] font-mono text-gray-300 font-bold mb-2">
                           {ex.timestamp
                             ? new Date(
-                                ex.timestamp.toDate(),
+                                typeof (ex.timestamp as any).toDate ===
+                                  "function"
+                                  ? (ex.timestamp as any).toDate()
+                                  : (ex.timestamp as any),
                               ).toLocaleDateString("en-US")
                             : "LOG"}
                         </span>

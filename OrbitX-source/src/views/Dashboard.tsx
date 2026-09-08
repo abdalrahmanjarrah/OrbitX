@@ -309,8 +309,8 @@ export default function Dashboard({
       await navigator.clipboard.writeText(buildInviteLink(user.uid));
       showToast(
         isAr
-          ? "تم نسخ رابط دعوتك — أرسله لصديق وانطلق نزالاً! 🚀"
-          : "Invite link copied — send it to a friend and launch a duel! 🚀",
+          ? "تم نسخ رابط دعوتك — لما يسجل صديقك تكسب 100 XP! 🚀"
+          : "Invite link copied — once your friend joins you earn 100 XP! 🚀",
         "success",
       );
     } catch (err) {
@@ -509,6 +509,9 @@ export default function Dashboard({
               <UserPlus size={18} className="group-hover:scale-110 transition-transform" />
               <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 scale-0 group-hover:scale-100 transition-all text-[10px] bg-indigo-950 text-fuchsia-300 border border-fuchsia-800/50 px-2 py-0.5 rounded whitespace-nowrap shadow-xl">
                 {isAr ? "ادعُ صديقاً 🚀" : "Invite a friend 🚀"}
+              </span>
+              <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-fuchsia-500 text-white rounded-full px-1.5 py-0.5 shadow-[0_0_10px_rgba(217,70,239,0.6)]">
+                +100
               </span>
             </button>
           )}

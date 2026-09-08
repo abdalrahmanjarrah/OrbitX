@@ -112,9 +112,6 @@ export async function claimChest(
   const claimed = getStoredClaimed();
   if (claimed.includes(chestIndex)) return 0;
 
-  claimed.push(chestIndex);
-  saveCycle(state.cycleStart, claimed, todayDate());
-
   const granted = await requestXpGrant(
     user.uid,
     user.fleetId || undefined,
@@ -125,7 +122,12 @@ export async function claimChest(
     true,
   );
 
+  // Only mark the chest as claimed once the server actually granted the XP.
+  // Otherwise a denied grant (e.g. no user row yet) would lock it forever.
   if (granted > 0) {
+    claimed.push(chestIndex);
+    saveCycle(state.cycleStart, claimed, todayDate());
+
     updateDoc(doc(db, "users", user.uid), {
       timeChests: {
         cycleStart: state.cycleStart,

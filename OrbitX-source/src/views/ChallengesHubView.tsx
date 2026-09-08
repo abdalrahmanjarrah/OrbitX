@@ -118,6 +118,7 @@ export default function ChallengesHubView({
         onStartChallengeClick={() => scrollTo("challenges-command-center")}
         onInviteFriendClick={handleInviteFriendClick}
         friendsCount={user.friendsCount || 0}
+        isAdmin={user.role === "admin"}
       />
 
       {/* 2. النزالات المشتعلة */}

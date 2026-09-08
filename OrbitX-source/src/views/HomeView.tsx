@@ -156,7 +156,6 @@ import SuggestionsSection from './SuggestionsSection';
 import QuranPlayer from './QuranPlayer';
 import PersonalTasks from './PersonalTasks';
 import StudyRoomView from './StudyRoomView';
-import { WeeklyDuelPanel } from './WeeklyDuelPanel';
 import LeaderboardView from './LeaderboardView';
 import FocusHeatmap from './FocusHeatmap';
 import ProfileView from './ProfileView';
@@ -509,9 +508,6 @@ export default function HomeView({
              <DailyHabitCard user={user} />
           </div>
         </motion.div>
-
-        {/* Weekly Duel — retention driver */}
-        <WeeklyDuelPanel user={user} />
 
         {/* Primary Content: Active Stations */}
         <div className="flex flex-col gap-5">

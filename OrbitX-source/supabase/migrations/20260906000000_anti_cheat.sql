@@ -94,7 +94,11 @@ BEGIN
 
     -- ANTI-CHEAT: forced (bypass-lock) positive grants from non-admins are
     -- throttled to one per minute as well, so a script cannot farm XP endlessly.
-    IF NOT v_blocked AND NOT public.is_admin_user() AND p_force AND p_amount > 0 THEN
+    -- Time chests are exempt: tiny, self-imposed, once-per-cycle rewards (≤ 2/h)
+    -- tracked locally per user, so the 60s throttle wrongly rejected the
+    -- 2nd–5th chest claimed in one sitting.
+    IF NOT v_blocked AND NOT public.is_admin_user() AND p_force AND p_amount > 0
+       AND p_source <> 'time_chest' THEN
         IF v_now - COALESCE((v_row.data ->> 'lastForcedGrantAt')::bigint, 0) < 60000 THEN
             v_blocked := true;
         END IF;

@@ -5,6 +5,7 @@
 // access token; otherwise every read runs as an anonymous visitor and RLS
 // policies that target the `authenticated` role return nothing.
 import { authClient } from "./supabaseAuth";
+import { RELATIONAL_MAP, rowToDoc, docPayloadForRel } from "./lib/relationalRegistry";
 let _sbPromise: Promise<any> | null = null;
 let _sbClient: any = null;
 
@@ -149,6 +150,58 @@ const loadedScopes = new Set<string>();
 const scopeLoadPromises = new Map<string, Promise<boolean>>();
 const missingPaths = new Set<string>();
 
+// --- Relational (users/profiles) bridge helpers ------------------------------
+// These collections are served from real tables; everything else still lives in
+// the `documents` fallback. Row timestamps arrive as ISO strings from PostgREST.
+const isoOf = (v: any): string =>
+  !v ? "" : typeof v === "string" ? v : new Date(v).toISOString();
+
+const rowToCached = (scope: string, row: any): FallbackDoc => {
+  const map = RELATIONAL_MAP[scope];
+  return {
+    path: scope + "/" + row[map.keyField],
+    collection: scope,
+    id: String(row[map.keyField]),
+    data: rowToDoc(scope, row),
+    updated_at: isoOf(row.updated_at),
+  };
+};
+
+// One relational doc read; null on a genuine miss, throws on a server error.
+const readRelDoc = async (collectionName: string, id: string): Promise<any | null> => {
+  const map = RELATIONAL_MAP[collectionName];
+  if (!map) return null;
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from(map.table)
+    .select("*")
+    .eq(map.keyField, id)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+};
+
+// Persist a users/profiles doc through the sanctioned RPC (server owns
+// progression). Returns "ok" (persisted) | "missing" (RPC not deployed yet ->
+// fall back to documents) | "error" (something failed -> keep locally).
+const persistRelWrite = async (docRef: MockDocRef, docData: any): Promise<"ok" | "missing" | "error"> => {
+  try {
+    const supabase = await getSupabase();
+    const { error } = await supabase.rpc("rel_register_user", {
+      p_collection: docRef.collectionName,
+      p_uid: docRef.id,
+      p_doc: docPayloadForRel(docRef.collectionName, docData),
+    });
+    if (!error) return "ok";
+    if (isRpcUnavailable(error)) return "missing";
+    console.warn(`[Supabase Compatibility] relational persist failed on ${docRef.path}:`, error);
+    return "error";
+  } catch (e) {
+    console.warn(`[Supabase Compatibility] relational persist threw on ${docRef.path}:`, e);
+    return "error";
+  }
+};
+
 const scopeKeyOfPath = (path: string): string => {
   const i = path.lastIndexOf("/");
   return i === -1 ? path : path.slice(0, i);
@@ -212,6 +265,23 @@ const ensureScopeLoaded = (colRef: MockColRef): Promise<boolean> => {
   const p = (async (): Promise<boolean> => {
     try {
       const supabase = await getSupabase();
+
+      // Relational collections (users / profiles): load the whole table once.
+      if (RELATIONAL_MAP[scope] && !scope.includes("/")) {
+        const map = RELATIONAL_MAP[scope];
+        const { data, error } = await supabase.from(map.table).select("*");
+        if (error) throw error;
+        (data || []).forEach((row: any) => {
+          if (row?.[map.keyField] == null) return;
+          setCached(rowToCached(scope, row));
+        });
+        loadedScopes.add(scope);
+        Array.from(missingPaths).forEach((pth) => {
+          if (pth.startsWith(scope + "/")) missingPaths.delete(pth);
+        });
+        return true;
+      }
+
       let builder: any = supabase
         .from("documents")
         .select("id, collection, path, data, updated_at")
@@ -252,6 +322,22 @@ const ensureScopeLoaded = (colRef: MockColRef): Promise<boolean> => {
 // already in memory, so a partial update never wipes fields on the server.
 const getServerDocData = async (path: string): Promise<any> => {
   try {
+    const parts = path.split("/");
+    const collectionName = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+
+    // Relational collections read from their real tables first.
+    if (RELATIONAL_MAP[collectionName]) {
+      const supabase = await getSupabase();
+      const map = RELATIONAL_MAP[collectionName];
+      const { data, error } = await supabase
+        .from(map.table)
+        .select("*")
+        .eq(map.keyField, parts[parts.length - 1])
+        .maybeSingle();
+      if (error) throw error;
+      return data ? rowToDoc(collectionName, data) : null;
+    }
+
     const supabase = await getSupabase();
     const { data, error } = await supabase
       .from("documents")
@@ -277,20 +363,56 @@ const refreshFromServer = async () => {
     const nowTs = Date.now();
     const sinceIso = new Date(lastSyncTime || 0).toISOString();
     const scopeCollections = loadedCollectionNames();
+    const legacyCollections = scopeCollections.filter((c) => !RELATIONAL_MAP[c]);
+
+    // 0) Relational delta sweep (users/profiles tables): rows changed since the
+    //    last tick, then a slow deletion sweep kept for every scope.
+    const relChanged: string[] = [];
+    const relDeleted: string[] = [];
+    for (const scope of Array.from(loadedScopes)) {
+      if (!RELATIONAL_MAP[scope]) continue;
+      const map = RELATIONAL_MAP[scope];
+      const sweep = await supabase
+        .from(map.table)
+        .select("*")
+        .gt("updated_at", sinceIso)
+        .order("updated_at", { ascending: true })
+        .limit(5000);
+      if (sweep.error) throw sweep.error;
+      (sweep.data || []).forEach((row: any) => {
+        if (row?.[map.keyField] == null) return;
+        const path = scope + "/" + row[map.keyField];
+        const prev = memoryDb.get(path);
+        const changedRemote = !prev || isoOf(prev.updated_at) !== isoOf(row.updated_at);
+        if (changedRemote) {
+          setCached(rowToCached(scope, row));
+          missingPaths.delete(path);
+          relChanged.push(path);
+        }
+      });
+    }
+
+    if (legacyCollections.length === 0) {
+      // 1b) No documents-backed scopes are loaded: skip the legacy sweep.
+      lastSyncTime = nowTs;
+      rebuildIndex();
+      notifyListeners(relChanged.length > 30 ? undefined : relChanged);
+      return;
+    }
 
     // 1) Delta sweep: metadata of ONLY docs that changed remotely since the
     //    last tick. Cost grows with real churn, never with total table size.
+    const changed: string[] = [];
     const sweep = await supabase
       .from("documents")
       .select("id, collection, path, updated_at")
-      .in("collection", scopeCollections)
+      .in("collection", legacyCollections)
       .gt("updated_at", sinceIso)
       .order("updated_at", { ascending: true })
       .limit(5000);
     if (sweep.error) throw sweep.error;
 
     const seen = new Set<string>();
-    const changed: string[] = [];
     (sweep.data || []).forEach(row => {
       if (!row.path || !isPathInLoadedScopes(row.path)) return;
       seen.add(row.path);
@@ -307,10 +429,30 @@ const refreshFromServer = async () => {
     //    only every 10 minutes.
     if (nowTs - lastDeleteSweep > 10 * 60 * 1000) {
       lastDeleteSweep = nowTs;
+      for (const scope of Array.from(loadedScopes)) {
+        if (!RELATIONAL_MAP[scope]) continue;
+        const map = RELATIONAL_MAP[scope];
+        const all = await supabase.from(map.table).select(map.keyField);
+        if (all.error) throw all.error;
+        const alive = new Set<string>();
+        (all.data || []).forEach((r: any) => {
+          const id = r?.[map.keyField];
+          if (id != null) alive.add(scope + "/" + id);
+        });
+        Array.from(memoryDb.keys()).forEach(path => {
+          const segs = path.split("/");
+          // Only top-level `scope/<id>` rows belong to the relational scope.
+          if (segs.length === 2 && segs[0] === scope && !alive.has(path)) {
+            memoryDb.delete(path);
+            missingPaths.add(path);
+            relDeleted.push(path);
+          }
+        });
+      }
       const full = await supabase
         .from("documents")
         .select("path")
-        .in("collection", scopeCollections);
+        .in("collection", legacyCollections);
       if (full.error) throw full.error;
       const alive = new Set<string>();
       (full.data || []).forEach((r: any) => {
@@ -333,7 +475,7 @@ const refreshFromServer = async () => {
         const all = await supabase
           .from("documents")
           .select("id, collection, path, data, updated_at")
-          .in("collection", scopeCollections);
+          .in("collection", legacyCollections);
         if (all.error) throw all.error;
         fetched = all.data || [];
       } else {
@@ -360,7 +502,8 @@ const refreshFromServer = async () => {
     lastSyncTime = nowTs;
     rebuildIndex();
     // Only re-render listeners whose data actually changed
-    notifyListeners(changed.length > 30 ? undefined : changed);
+    const allChanged = changed.concat(relChanged).concat(relDeleted);
+    notifyListeners(allChanged.length > 30 ? undefined : allChanged);
   } catch (e) {
     console.warn("[Supabase Compatibility] background refresh failed:", e);
   }
@@ -559,6 +702,21 @@ export const getDoc = async (docRef: MockDocRef): Promise<MockDocSnapshot> => {
   }
   if (missingPaths.has(docRef.path) || loadedScopes.has(scopeKeyOfPath(docRef.path))) {
     return new MockDocSnapshot(false, docRef.id, null, docRef);
+  }
+
+  // Relational collections read straight from their table (users/profiles).
+  if (RELATIONAL_MAP[docRef.collectionName]) {
+    try {
+      const row = await readRelDoc(docRef.collectionName, docRef.id);
+      if (row) {
+        setCached(rowToCached(docRef.collectionName, row));
+        return new MockDocSnapshot(true, docRef.id, rowToDoc(docRef.collectionName, row), docRef);
+      }
+      missingPaths.add(docRef.path);
+    } catch (e) {
+      console.warn(`[Supabase Compatibility] relational getDoc failed for ${docRef.path}:`, e);
+    }
+    return fromLocal();
   }
 
   try {
@@ -781,6 +939,17 @@ export const setDoc = async (docRef: MockDocRef, data: any, options?: { merge?: 
   });
   notifyListeners(docRef.path);
 
+  // Relational collections persist through the sanctioned RPC.
+  if (RELATIONAL_MAP[docRef.collectionName]) {
+    const res = await persistRelWrite(docRef, finalData);
+    if (res === "ok") return;
+    if (res === "error") {
+      applyLocalSet();
+      return;
+    }
+    // res === "missing" -> migration not applied yet, fall back to documents
+  }
+
   if (options?.merge) {
     const handled = await persistIncremental(docRef, data, finalData);
     if (handled) return;
@@ -851,6 +1020,17 @@ export const updateDoc = async (docRef: MockDocRef, updates: any): Promise<void>
   });
   notifyListeners(docRef.path);
 
+  // Relational collections persist through the sanctioned RPC.
+  if (RELATIONAL_MAP[docRef.collectionName]) {
+    const res = await persistRelWrite(docRef, finalData);
+    if (res === "ok") return;
+    if (res === "error") {
+      applyLocalUpdate();
+      return;
+    }
+    // res === "missing" -> migration not applied yet, fall back to documents
+  }
+
   const handled = await persistIncremental(docRef, updates, finalData);
   if (handled) return;
 
@@ -904,6 +1084,18 @@ export const deleteDoc = async (docRef: MockDocRef): Promise<void> => {
 
   try {
     const supabase = await getSupabase();
+
+    // Relational collections delete from their real table.
+    if (RELATIONAL_MAP[docRef.collectionName]) {
+      const map = RELATIONAL_MAP[docRef.collectionName];
+      const { error } = await supabase
+        .from(map.table)
+        .delete()
+        .eq(map.keyField, docRef.id);
+      if (error) throw error;
+      return;
+    }
+
     const { error } = await supabase
       .from("documents")
       .delete()

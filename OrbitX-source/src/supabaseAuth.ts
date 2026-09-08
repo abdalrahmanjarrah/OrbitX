@@ -76,7 +76,7 @@ const getRedirectUrl = () => {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const base = import.meta.env.BASE_URL || "/";
   const basePath = base.startsWith("/") ? base : "/" + base;
-  return (origin + basePath).replace(/\/+$/, "") || "https://ais-dev-h7znwe7lpee7pk7vyclbkj-6254332619.europe-west2.run.app";
+  return (origin + basePath).replace(/\/+$/, "") || "https://orbitx.study";
 };
 
 // Google sign in via OAuth popup or redirection

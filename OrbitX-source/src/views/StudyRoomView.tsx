@@ -312,7 +312,6 @@ function StudyRoomContent({
         showAFKCheck={showAFKCheck}
         setShowAFKCheck={setShowAFKCheck}
         afkTimeLeft={afkTimeLeft}
-        setIsWatchingClass={setIsWatchingClass}
         showFuelLeak={showFuelLeak}
         setShowFuelLeak={setShowFuelLeak}
         shieldPercent={shieldPercent}
