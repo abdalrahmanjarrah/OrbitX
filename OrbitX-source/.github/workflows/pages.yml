@@ -1,5 +1,6 @@
 name: Deploy to GitHub Pages
 
+# Force workflow re-registration for default branch (Pages artifact deploy)
 on:
   push:
     branches: [main]
