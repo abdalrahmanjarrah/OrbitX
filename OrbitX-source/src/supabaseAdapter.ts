@@ -5,7 +5,7 @@
 // access token; otherwise every read runs as an anonymous visitor and RLS
 // policies that target the `authenticated` role return nothing.
 import { authClient } from "./supabaseAuth";
-import { RELATIONAL_MAP, TABLE_COLLECTIONS, rowToDoc, docPayloadForRel } from "./lib/relationalRegistry";
+import { RELATIONAL_MAP, getTableBridge, rowToDoc, docPayloadForRel, toMs } from "./lib/relationalRegistry";
 let _sbPromise: Promise<any> | null = null;
 let _sbClient: any = null;
 
@@ -282,21 +282,27 @@ const ensureScopeLoaded = (colRef: MockColRef): Promise<boolean> => {
         return true;
       }
 
-      // Table-backed collections (e.g. admin_alerts): load from their real
-      // table and map rows straight into cached docs.
-      if (TABLE_COLLECTIONS[scope] && !scope.includes("/")) {
-        const tableMap = TABLE_COLLECTIONS[scope];
-        const { data, error } = await supabase.from(tableMap.table).select("*");
+      // Table-backed collections (rooms, admin_alerts, chats, notifications,
+      // friends, ...): load from their dedicated table. Top-level scopes load
+      // the whole table; subcollection scopes filter by the parent column.
+      const bridge = getTableBridge(scope);
+      if (bridge && (scope.includes("/") ? !!bridge.parentIdColumn : true)) {
+        let builder: any = (await getSupabase()).from(bridge.table).select("*");
+        if (bridge.parentIdColumn) {
+          const parentId = scope.split("/")[1];
+          builder = builder.eq(bridge.parentIdColumn, parentId);
+        }
+        const { data, error } = await builder;
         if (error) throw error;
         (data || []).forEach((row: any) => {
-          if (row?.[tableMap.keyField] == null) return;
-          const id = String(row[tableMap.keyField]);
+          if (row?.[bridge.keyField] == null) return;
+          const id = String(row[bridge.keyField]);
           setCached({
             path: scope + "/" + id,
-            collection: scope,
+            collection: scope.split("/").pop(),
             id,
-            data: tableMap.rowToDoc(row),
-            updated_at: row.updated_at || row.created_at || "",
+            data: bridge.rowToDoc(row),
+            updated_at: row.updated_at || row.created_at || row.timestamp || "",
           });
         });
         loadedScopes.add(scope);
@@ -362,17 +368,21 @@ const getServerDocData = async (path: string): Promise<any> => {
       return data ? rowToDoc(collectionName, data) : null;
     }
 
-    // Table-backed collections (admin_alerts, rooms) read from their table.
-    if (TABLE_COLLECTIONS[collectionName]) {
+    // Table-backed collections read from their dedicated table.
+    const scopePath = collectionName && parts.length >= 2 ? parts.slice(0, -1).join("/") : "";
+    const bridge = scopePath ? getTableBridge(scopePath) : null;
+    if (bridge) {
       const supabase = await getSupabase();
-      const tableMap = TABLE_COLLECTIONS[collectionName];
-      const { data, error } = await supabase
-        .from(tableMap.table)
+      let query = supabase
+        .from(bridge.table)
         .select("*")
-        .eq(tableMap.keyField, parts[parts.length - 1])
-        .maybeSingle();
+        .eq(bridge.keyField, parts[parts.length - 1]);
+      if (bridge.parentIdColumn) {
+        query = query.eq(bridge.parentIdColumn, parts[0]);
+      }
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
-      return data ? tableMap.rowToDoc(data) : null;
+      return data ? bridge.rowToDoc(data) : null;
     }
 
     const supabase = await getSupabase();
@@ -400,43 +410,56 @@ const refreshFromServer = async () => {
     const nowTs = Date.now();
     const sinceIso = new Date(lastSyncTime || 0).toISOString();
     const scopeCollections = loadedCollectionNames();
-    const legacyCollections = scopeCollections.filter((c) => !RELATIONAL_MAP[c] && !TABLE_COLLECTIONS[c]);
+    const bridgedNames = new Set<string>();
+    Array.from(loadedScopes).forEach((s) => {
+      if (RELATIONAL_MAP[s] || getTableBridge(s)) bridgedNames.add(s.split("/").pop() as string);
+    });
+    const legacyCollections = scopeCollections.filter((c) => !bridgedNames.has(c));
 
-    // 0) Relational + table-backed delta sweep (users/profiles/rooms/admin_alerts):
-    //    rows changed since the last tick, then a slow deletion sweep kept for
-    //    every scope.
+    // 0) Relational + table-backed delta sweep: rows changed since the last
+    //    tick, then a slow deletion sweep kept for every scope.
     const relChanged: string[] = [];
     const relDeleted: string[] = [];
+    const sinceTsMs = lastSyncTime || 0;
     const tableScopes = Array.from(loadedScopes).filter(
-      (s) => RELATIONAL_MAP[s] || TABLE_COLLECTIONS[s]
+      (s) => RELATIONAL_MAP[s] || !!getTableBridge(s)
     );
     for (const scope of tableScopes) {
       const relMap = RELATIONAL_MAP[scope];
-      const tblMap = TABLE_COLLECTIONS[scope];
-      const table = relMap ? relMap.table : tblMap!.table;
-      const keyField = relMap ? relMap.keyField : tblMap!.keyField;
+      const bridge = getTableBridge(scope);
+      const table = relMap ? relMap.table : bridge!.table;
+      const keyField = relMap ? relMap.keyField : bridge!.keyField;
+      const syncCol = relMap ? "updated_at" : bridge!.syncCol || "updated_at";
+      const sweepValue = relMap || !bridge!.syncIsMs ? sinceIso : sinceTsMs;
       const sweep = await supabase
         .from(table)
         .select("*")
-        .gt("updated_at", sinceIso)
-        .order("updated_at", { ascending: true })
+        .gt(syncCol, sweepValue)
+        .order(syncCol, { ascending: true })
         .limit(5000);
       if (sweep.error) throw sweep.error;
       (sweep.data || []).forEach((row: any) => {
         if (row?.[keyField] == null) return;
         const path = scope + "/" + row[keyField];
         const prev = memoryDb.get(path);
-        const changedRemote = !prev || isoOf(prev.updated_at) !== isoOf(row.updated_at);
+        const rowStamp = row[syncCol];
+        const changedRemote =
+          !prev ||
+          (bridge?.syncIsMs
+            ? Number(rowStamp || 0) !== Number((prev.updated_at as any) || 0)
+            : isoOf(prev.updated_at) !== isoOf(rowStamp));
         if (changedRemote) {
           setCached(
             relMap
               ? rowToCached(scope, row)
               : {
                   path,
-                  collection: scope,
+                  collection: scope.split("/").pop(),
                   id: String(row[keyField]),
-                  data: tblMap!.rowToDoc(row),
-                  updated_at: row.updated_at || "",
+                  data: bridge!.rowToDoc(row),
+                  updated_at: bridge!.syncIsMs
+                    ? String(rowStamp || 0)
+                    : row.updated_at || row.created_at || "",
                 }
           );
           missingPaths.delete(path);
@@ -484,10 +507,10 @@ const refreshFromServer = async () => {
       lastDeleteSweep = nowTs;
       for (const scope of Array.from(loadedScopes)) {
         const relMap = RELATIONAL_MAP[scope];
-        const tblMap = TABLE_COLLECTIONS[scope];
-        if (!relMap && !tblMap) continue;
-        const table = relMap ? relMap.table : tblMap!.table;
-        const keyField = relMap ? relMap.keyField : tblMap!.keyField;
+        const bridge = getTableBridge(scope);
+        if (!relMap && !bridge) continue;
+        const table = relMap ? relMap.table : bridge!.table;
+        const keyField = relMap ? relMap.keyField : bridge!.keyField;
         const all = await supabase.from(table).select(keyField);
         if (all.error) throw all.error;
         const alive = new Set<string>();
@@ -775,24 +798,26 @@ export const getDoc = async (docRef: MockDocRef): Promise<MockDocSnapshot> => {
     return fromLocal();
   }
 
-  // Table-backed collections read straight from their table (rooms, admin_alerts).
-  if (TABLE_COLLECTIONS[docRef.collectionName]) {
+  // Table-backed collections read straight from their dedicated table
+  // (rooms, admin_alerts, chats, notifications, friends, ...).
+  const scope = scopeKeyOfPath(docRef.path);
+  const bridge = getTableBridge(scope);
+  if (bridge) {
     try {
-      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
       const supabase = await getSupabase();
-      const { data, error } = await supabase
-        .from(tableMap.table)
-        .select("*")
-        .eq(tableMap.keyField, docRef.id)
-        .maybeSingle();
+      let query = supabase.from(bridge.table).select("*").eq(bridge.keyField, docRef.id);
+      if (bridge.parentIdColumn) {
+        query = query.eq(bridge.parentIdColumn, docRef.path.split("/")[1]);
+      }
+      const { data, error } = await query.maybeSingle();
       if (!error && data) {
-        const docData = tableMap.rowToDoc(data);
+        const docData = bridge.rowToDoc(data);
         setCached({
           path: docRef.path,
           collection: docRef.collectionName,
           id: docRef.id,
           data: docData,
-          updated_at: data.updated_at || ""
+          updated_at: data.updated_at || data.created_at || ""
         });
         return new MockDocSnapshot(true, docRef.id, docData, docRef);
       }
@@ -1035,17 +1060,45 @@ export const setDoc = async (docRef: MockDocRef, data: any, options?: { merge?: 
   }
 
   // Table-backed collections write to their dedicated relational table.
-  if (TABLE_COLLECTIONS[docRef.collectionName]) {
+  const writeScope = scopeKeyOfPath(docRef.path);
+  const writeBridge = getTableBridge(writeScope);
+  if (writeBridge) {
     try {
-      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
       const supabase = await getSupabase();
-      const row = tableMap.docToRow({ ...finalData, id: docRef.id });
-      row.updated_at = new Date().toISOString();
+
+      // Client errors are logged through the sanctioned RPC only (the errors
+      // table has direct writes revoked).
+      if (writeBridge.table === "errors" && isRealSupabase) {
+        const p_data = {
+          uid: finalData.uid ?? null,
+          username: finalData.userName ?? null,
+          message: finalData.message ?? "",
+          context: finalData.context ?? null,
+          source: finalData.source ?? "",
+          stack: finalData.stack ?? null,
+          url: finalData.url ?? null,
+          useragent: finalData.userAgent ?? null,
+          count: finalData.count ?? 1,
+          ts: typeof finalData.ts === "number" ? finalData.ts : Date.now(),
+          createdat: toMs(finalData.createdAt) ?? undefined,
+          extra: finalData.extra ?? {},
+        };
+        const { error } = await supabase.rpc("log_error", { p_data, p_id: docRef.id });
+        if (error) throw error;
+        return;
+      }
+
+      const row = writeBridge.docToRow({ ...finalData, id: docRef.id }, docRef.path);
+      if (writeBridge.syncIsMs) {
+        row[writeBridge.syncCol || "timestamp"] = Date.now();
+      } else {
+        row[writeBridge.syncCol || "updated_at"] = new Date().toISOString();
+      }
+      const onConflict =
+        writeBridge.table === "friends" ? ["user_id", "friend_id"] : writeBridge.keyField;
       const { error } = await supabase
-        .from(tableMap.table)
-        .upsert(row, {
-          onConflict: tableMap.keyField,
-        });
+        .from(writeBridge.table)
+        .upsert(row, { onConflict });
       if (error) throw error;
       return;
     } catch (err) {
@@ -1136,16 +1189,32 @@ export const updateDoc = async (docRef: MockDocRef, updates: any): Promise<void>
       // res === "missing" -> migration not applied yet, fall back to documents
     }
 
-    // Table-backed collections (rooms, admin_alerts) upsert their row.
-    if (TABLE_COLLECTIONS[docRef.collectionName]) {
-      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
+    // Table-backed collections (rooms, admin_alerts, chats, ...) upsert their row.
+    const updScope = scopeKeyOfPath(docRef.path);
+    const updBridge = getTableBridge(updScope);
+    if (updBridge) {
       try {
-        const row = tableMap.docToRow({ ...finalData, id: docRef.id });
-        row.updated_at = new Date().toISOString();
         const supabase = await getSupabase();
+        if (updBridge.table === "errors" && isRealSupabase) {
+          const ts = typeof finalData.ts === "number" ? finalData.ts : Date.now();
+          const { error } = await supabase.rpc("bump_error_count", {
+            p_id: docRef.id,
+            p_last_at: ts,
+          });
+          if (error) throw error;
+          return;
+        }
+        const row = updBridge.docToRow({ ...finalData, id: docRef.id }, docRef.path);
+        if (updBridge.syncIsMs) {
+          row[updBridge.syncCol || "timestamp"] = Date.now();
+        } else {
+          row[updBridge.syncCol || "updated_at"] = new Date().toISOString();
+        }
+        const onConflict =
+          updBridge.table === "friends" ? ["user_id", "friend_id"] : updBridge.keyField;
         const { error } = await supabase
-          .from(tableMap.table)
-          .upsert(row, { onConflict: tableMap.keyField });
+          .from(updBridge.table)
+          .upsert(row, { onConflict });
         if (error) {
           if (error.code === "42501") {
             applyLocalUpdate();
@@ -1216,12 +1285,15 @@ export const deleteDoc = async (docRef: MockDocRef): Promise<void> => {
     const supabase = await getSupabase();
 
     // Table-backed collections delete from their dedicated relational table.
-    if (TABLE_COLLECTIONS[docRef.collectionName]) {
-      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
-      const { error } = await supabase
-        .from(tableMap.table)
-        .delete()
-        .eq(tableMap.keyField, docRef.id);
+    const delScope = scopeKeyOfPath(docRef.path);
+    const delBridge = getTableBridge(delScope);
+    if (delBridge) {
+      let q = supabase.from(delBridge.table).delete();
+      q = q.eq(delBridge.keyField, docRef.id);
+      if (delBridge.parentIdColumn) {
+        q = q.eq(delBridge.parentIdColumn, docRef.path.split("/")[1]);
+      }
+      const { error } = await q;
       if (error) throw error;
       return;
     }
