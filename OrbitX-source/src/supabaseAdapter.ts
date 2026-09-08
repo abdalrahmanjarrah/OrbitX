@@ -5,7 +5,7 @@
 // access token; otherwise every read runs as an anonymous visitor and RLS
 // policies that target the `authenticated` role return nothing.
 import { authClient } from "./supabaseAuth";
-import { RELATIONAL_MAP, rowToDoc, docPayloadForRel } from "./lib/relationalRegistry";
+import { RELATIONAL_MAP, TABLE_COLLECTIONS, rowToDoc, docPayloadForRel } from "./lib/relationalRegistry";
 let _sbPromise: Promise<any> | null = null;
 let _sbClient: any = null;
 
@@ -274,6 +274,30 @@ const ensureScopeLoaded = (colRef: MockColRef): Promise<boolean> => {
         (data || []).forEach((row: any) => {
           if (row?.[map.keyField] == null) return;
           setCached(rowToCached(scope, row));
+        });
+        loadedScopes.add(scope);
+        Array.from(missingPaths).forEach((pth) => {
+          if (pth.startsWith(scope + "/")) missingPaths.delete(pth);
+        });
+        return true;
+      }
+
+      // Table-backed collections (e.g. admin_alerts): load from their real
+      // table and map rows straight into cached docs.
+      if (TABLE_COLLECTIONS[scope] && !scope.includes("/")) {
+        const tableMap = TABLE_COLLECTIONS[scope];
+        const { data, error } = await supabase.from(tableMap.table).select("*");
+        if (error) throw error;
+        (data || []).forEach((row: any) => {
+          if (row?.[tableMap.keyField] == null) return;
+          const id = String(row[tableMap.keyField]);
+          setCached({
+            path: scope + "/" + id,
+            collection: scope,
+            id,
+            data: tableMap.rowToDoc(row),
+            updated_at: row.created_at || "",
+          });
         });
         loadedScopes.add(scope);
         Array.from(missingPaths).forEach((pth) => {
@@ -950,6 +974,25 @@ export const setDoc = async (docRef: MockDocRef, data: any, options?: { merge?: 
     // res === "missing" -> migration not applied yet, fall back to documents
   }
 
+  // Table-backed collections write to their dedicated relational table.
+  if (TABLE_COLLECTIONS[docRef.collectionName]) {
+    try {
+      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
+      const supabase = await getSupabase();
+      const { error } = await supabase
+        .from(tableMap.table)
+        .upsert(tableMap.docToRow({ ...finalData, id: docRef.id }), {
+          onConflict: tableMap.keyField,
+        });
+      if (error) throw error;
+      return;
+    } catch (err) {
+      console.warn(`[Supabase Compatibility] table write failed on ${docRef.path}:`, err);
+      applyLocalSet();
+      return;
+    }
+  }
+
   if (options?.merge) {
     const handled = await persistIncremental(docRef, data, finalData);
     if (handled) return;
@@ -1084,6 +1127,17 @@ export const deleteDoc = async (docRef: MockDocRef): Promise<void> => {
 
   try {
     const supabase = await getSupabase();
+
+    // Table-backed collections delete from their dedicated relational table.
+    if (TABLE_COLLECTIONS[docRef.collectionName]) {
+      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
+      const { error } = await supabase
+        .from(tableMap.table)
+        .delete()
+        .eq(tableMap.keyField, docRef.id);
+      if (error) throw error;
+      return;
+    }
 
     // Relational collections delete from their real table.
     if (RELATIONAL_MAP[docRef.collectionName]) {

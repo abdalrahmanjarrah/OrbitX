@@ -131,8 +131,9 @@ export default function AdminView({ user }: { user: UserData }) {
     try {
       await addDoc(collection(db, "admin_alerts"), {
         message: announcementText,
-        createdAt: serverTimestamp(),
         adminId: user.uid,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 10 * 60 * 1000,
       });
       setAnnouncementText("");
       showToast(isAr ? "تم إطلاق تنبيه الطوارئ!" : "EMERGENCY ALERT dispatched!", "warning");

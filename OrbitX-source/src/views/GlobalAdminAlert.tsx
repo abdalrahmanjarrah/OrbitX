@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, doc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { AlertTriangle, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -45,9 +45,17 @@ export default function GlobalAdminAlert() {
   useEffect(() => {
     // Show each admin message ONCE per browser — remember across reloads in localStorage,
     // and dedupe within the current session too.
-    const q = query(collection(db, "admin_alerts"), orderBy("createdAt", "desc"), limit(1));
+    const q = query(
+      collection(db, "admin_alerts"),
+      where("expiresAt", ">", Date.now()),
+      orderBy("createdAt", "desc"),
+      limit(1),
+    );
     const unsub = onSnapshot(q, (snap) => {
-      if (!snap.empty) {
+      if (snap.empty) {
+        setAlert(null);
+        return;
+      }
         const data = snap.docs[0].data();
         const id = snap.docs[0].id;
         const contentKey = hashText(String(data.message || data.text || "").replace(/\s+/g, " ").trim() || id);
@@ -65,7 +73,6 @@ export default function GlobalAdminAlert() {
             setAlert((prev: any) => prev?.id === id ? null : prev);
           }, 15000); // Auto hide after 15 seconds
         }
-      }
     }, (error) => {
       console.warn("Global alert error:", error.message);
     });
@@ -74,6 +81,13 @@ export default function GlobalAdminAlert() {
   }, []);
 
   if (!alert) return null;
+
+  const dismiss = () => {
+    setAlert(null);
+    if (alert.id) {
+      deleteDoc(doc(db, "admin_alerts", alert.id)).catch(() => {});
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -92,7 +106,7 @@ export default function GlobalAdminAlert() {
             <h3 className="text-white font-black text-xl mb-1 flex items-center justify-between">
               {isAr ? "رسالة إدارية هامة" : "Important Admin Message"}
               <button 
-                onClick={() => setAlert(null)}
+                onClick={dismiss}
                 className="p-1 hover:bg-white/10 rounded-lg transition-colors"
                 title={isAr ? "إغلاق التنبيه" : "Close Alert"}
               >

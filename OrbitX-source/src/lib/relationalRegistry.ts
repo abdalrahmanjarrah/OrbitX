@@ -83,6 +83,47 @@ export const PROFILES_COLUMNS: Record<string, string> = {
   extra: "extra",
 };
 
+// =============================================================================
+// Table-backed collections — the same bridge for collections that live on a
+// dedicated relational table (not the documents JSONB fallback) but DON'T go
+// through the users/profiles RPC. admin_alerts is the first migration target.
+// =============================================================================
+
+export interface TableCollectionMap {
+  table: string;
+  keyField: string;
+  rowToDoc: (row: any) => any;
+  docToRow: (doc: any) => any;
+}
+
+const adminAlertsRowToDoc = (row: any): any => ({
+  id: row.id,
+  adminId: row.adminid || "",
+  message: row.message || "",
+  createdAt: row.createdat ?? 0,
+  expiresAt: row.extra?.expiresAt ?? 0,
+});
+
+const adminAlertsDocToRow = (doc: any): any => ({
+  id: doc.id,
+  adminid: doc.adminId || "",
+  message: doc.message || "",
+  createdat: typeof doc.createdAt === "number" ? doc.createdAt : Date.now(),
+  extra: {
+    expiresAt:
+      typeof doc.expiresAt === "number" ? doc.expiresAt : Date.now() + 10 * 60 * 1000,
+  },
+});
+
+export const TABLE_COLLECTIONS: Record<string, TableCollectionMap> = {
+  admin_alerts: {
+    table: "admin_alerts",
+    keyField: "id",
+    rowToDoc: adminAlertsRowToDoc,
+    docToRow: adminAlertsDocToRow,
+  },
+};
+
 export const RELATIONAL_MAP: Record<string, RelationMap> = {
   users: {
     table: "users",
