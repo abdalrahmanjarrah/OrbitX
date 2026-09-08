@@ -24,7 +24,7 @@ const syncSessionToDataClient = async (): Promise<void> => {
   }
 };
 
-const getSupabase = (): Promise<any> => {
+export const getSupabase = (): Promise<any> => {
   if (!_sbPromise) {
     _sbPromise = (async () => {
       const { createClient } = await import("@supabase/supabase-js");
@@ -296,7 +296,7 @@ const ensureScopeLoaded = (colRef: MockColRef): Promise<boolean> => {
             collection: scope,
             id,
             data: tableMap.rowToDoc(row),
-            updated_at: row.created_at || "",
+            updated_at: row.updated_at || row.created_at || "",
           });
         });
         loadedScopes.add(scope);
@@ -362,6 +362,19 @@ const getServerDocData = async (path: string): Promise<any> => {
       return data ? rowToDoc(collectionName, data) : null;
     }
 
+    // Table-backed collections (admin_alerts, rooms) read from their table.
+    if (TABLE_COLLECTIONS[collectionName]) {
+      const supabase = await getSupabase();
+      const tableMap = TABLE_COLLECTIONS[collectionName];
+      const { data, error } = await supabase
+        .from(tableMap.table)
+        .select("*")
+        .eq(tableMap.keyField, parts[parts.length - 1])
+        .maybeSingle();
+      if (error) throw error;
+      return data ? tableMap.rowToDoc(data) : null;
+    }
+
     const supabase = await getSupabase();
     const { data, error } = await supabase
       .from("documents")
@@ -387,29 +400,45 @@ const refreshFromServer = async () => {
     const nowTs = Date.now();
     const sinceIso = new Date(lastSyncTime || 0).toISOString();
     const scopeCollections = loadedCollectionNames();
-    const legacyCollections = scopeCollections.filter((c) => !RELATIONAL_MAP[c]);
+    const legacyCollections = scopeCollections.filter((c) => !RELATIONAL_MAP[c] && !TABLE_COLLECTIONS[c]);
 
-    // 0) Relational delta sweep (users/profiles tables): rows changed since the
-    //    last tick, then a slow deletion sweep kept for every scope.
+    // 0) Relational + table-backed delta sweep (users/profiles/rooms/admin_alerts):
+    //    rows changed since the last tick, then a slow deletion sweep kept for
+    //    every scope.
     const relChanged: string[] = [];
     const relDeleted: string[] = [];
-    for (const scope of Array.from(loadedScopes)) {
-      if (!RELATIONAL_MAP[scope]) continue;
-      const map = RELATIONAL_MAP[scope];
+    const tableScopes = Array.from(loadedScopes).filter(
+      (s) => RELATIONAL_MAP[s] || TABLE_COLLECTIONS[s]
+    );
+    for (const scope of tableScopes) {
+      const relMap = RELATIONAL_MAP[scope];
+      const tblMap = TABLE_COLLECTIONS[scope];
+      const table = relMap ? relMap.table : tblMap!.table;
+      const keyField = relMap ? relMap.keyField : tblMap!.keyField;
       const sweep = await supabase
-        .from(map.table)
+        .from(table)
         .select("*")
         .gt("updated_at", sinceIso)
         .order("updated_at", { ascending: true })
         .limit(5000);
       if (sweep.error) throw sweep.error;
       (sweep.data || []).forEach((row: any) => {
-        if (row?.[map.keyField] == null) return;
-        const path = scope + "/" + row[map.keyField];
+        if (row?.[keyField] == null) return;
+        const path = scope + "/" + row[keyField];
         const prev = memoryDb.get(path);
         const changedRemote = !prev || isoOf(prev.updated_at) !== isoOf(row.updated_at);
         if (changedRemote) {
-          setCached(rowToCached(scope, row));
+          setCached(
+            relMap
+              ? rowToCached(scope, row)
+              : {
+                  path,
+                  collection: scope,
+                  id: String(row[keyField]),
+                  data: tblMap!.rowToDoc(row),
+                  updated_at: row.updated_at || "",
+                }
+          );
           missingPaths.delete(path);
           relChanged.push(path);
         }
@@ -454,13 +483,16 @@ const refreshFromServer = async () => {
     if (nowTs - lastDeleteSweep > 10 * 60 * 1000) {
       lastDeleteSweep = nowTs;
       for (const scope of Array.from(loadedScopes)) {
-        if (!RELATIONAL_MAP[scope]) continue;
-        const map = RELATIONAL_MAP[scope];
-        const all = await supabase.from(map.table).select(map.keyField);
+        const relMap = RELATIONAL_MAP[scope];
+        const tblMap = TABLE_COLLECTIONS[scope];
+        if (!relMap && !tblMap) continue;
+        const table = relMap ? relMap.table : tblMap!.table;
+        const keyField = relMap ? relMap.keyField : tblMap!.keyField;
+        const all = await supabase.from(table).select(keyField);
         if (all.error) throw all.error;
         const alive = new Set<string>();
         (all.data || []).forEach((r: any) => {
-          const id = r?.[map.keyField];
+          const id = r?.[keyField];
           if (id != null) alive.add(scope + "/" + id);
         });
         Array.from(memoryDb.keys()).forEach(path => {
@@ -743,6 +775,34 @@ export const getDoc = async (docRef: MockDocRef): Promise<MockDocSnapshot> => {
     return fromLocal();
   }
 
+  // Table-backed collections read straight from their table (rooms, admin_alerts).
+  if (TABLE_COLLECTIONS[docRef.collectionName]) {
+    try {
+      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
+      const supabase = await getSupabase();
+      const { data, error } = await supabase
+        .from(tableMap.table)
+        .select("*")
+        .eq(tableMap.keyField, docRef.id)
+        .maybeSingle();
+      if (!error && data) {
+        const docData = tableMap.rowToDoc(data);
+        setCached({
+          path: docRef.path,
+          collection: docRef.collectionName,
+          id: docRef.id,
+          data: docData,
+          updated_at: data.updated_at || ""
+        });
+        return new MockDocSnapshot(true, docRef.id, docData, docRef);
+      }
+      if (!error) missingPaths.add(docRef.path);
+    } catch (e) {
+      console.warn(`[Supabase Compatibility] table-backed getDoc failed for ${docRef.path}:`, e);
+    }
+    return fromLocal();
+  }
+
   try {
     const supabase = await getSupabase();
     const { data, error } = await supabase
@@ -979,9 +1039,11 @@ export const setDoc = async (docRef: MockDocRef, data: any, options?: { merge?: 
     try {
       const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
       const supabase = await getSupabase();
+      const row = tableMap.docToRow({ ...finalData, id: docRef.id });
+      row.updated_at = new Date().toISOString();
       const { error } = await supabase
         .from(tableMap.table)
-        .upsert(tableMap.docToRow({ ...finalData, id: docRef.id }), {
+        .upsert(row, {
           onConflict: tableMap.keyField,
         });
       if (error) throw error;
@@ -1063,18 +1125,43 @@ export const updateDoc = async (docRef: MockDocRef, updates: any): Promise<void>
   });
   notifyListeners(docRef.path);
 
-  // Relational collections persist through the sanctioned RPC.
-  if (RELATIONAL_MAP[docRef.collectionName]) {
-    const res = await persistRelWrite(docRef, finalData);
-    if (res === "ok") return;
-    if (res === "error") {
-      applyLocalUpdate();
-      return;
+// Relational collections persist through the sanctioned RPC.
+    if (RELATIONAL_MAP[docRef.collectionName]) {
+      const res = await persistRelWrite(docRef, finalData);
+      if (res === "ok") return;
+      if (res === "error") {
+        applyLocalUpdate();
+        return;
+      }
+      // res === "missing" -> migration not applied yet, fall back to documents
     }
-    // res === "missing" -> migration not applied yet, fall back to documents
-  }
 
-  const handled = await persistIncremental(docRef, updates, finalData);
+    // Table-backed collections (rooms, admin_alerts) upsert their row.
+    if (TABLE_COLLECTIONS[docRef.collectionName]) {
+      const tableMap = TABLE_COLLECTIONS[docRef.collectionName];
+      try {
+        const row = tableMap.docToRow({ ...finalData, id: docRef.id });
+        row.updated_at = new Date().toISOString();
+        const supabase = await getSupabase();
+        const { error } = await supabase
+          .from(tableMap.table)
+          .upsert(row, { onConflict: tableMap.keyField });
+        if (error) {
+          if (error.code === "42501") {
+            applyLocalUpdate();
+            return;
+          }
+          throw error;
+        }
+        return;
+      } catch (err) {
+        console.warn(`[Supabase Compatibility] updateDoc failed on ${docRef.path}, storing locally:`, err);
+        applyLocalUpdate();
+        return;
+      }
+    }
+
+    const handled = await persistIncremental(docRef, updates, finalData);
   if (handled) return;
 
   try {

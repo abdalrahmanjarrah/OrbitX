@@ -114,6 +114,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { UserSearchView } from "../components/UserSearchView";
+import { restoreLegacyRoomsIfNeeded } from "../lib/roomsLegacyRestore";
 
 import { FirestoreError } from 'firebase/firestore';
 
@@ -228,6 +229,11 @@ export default function HomeView({
 
     const fetchData = async () => {
       try {
+        try {
+          await restoreLegacyRoomsIfNeeded(user.uid);
+        } catch (e) {
+          // non-fatal: restore is best-effort, never block the home view
+        }
         const roomsQuery = query(
           collection(db, "rooms"),
           orderBy("createdAt", "desc"),
