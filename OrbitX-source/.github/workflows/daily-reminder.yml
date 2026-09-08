@@ -1,0 +1,22 @@
+name: Daily reminder push
+
+on:
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+jobs:
+  reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire the daily reminder endpoint
+        env:
+          REMINDER_URL: ${{ secrets.REMINDER_URL }}
+        run: |
+          if [ -z "$REMINDER_URL" ]; then
+            echo "⚠️ REMINDER_URL secret is not set."
+            echo "Add it in GitHub repo → Settings → Secrets and variables → Actions."
+            echo "Value example: https://YOUR-RENDER-URL/api/push/daily-reminder?secret=YOUR_SECRET"
+            exit 1
+          fi
+          curl -fsS -X POST "$REMINDER_URL"
