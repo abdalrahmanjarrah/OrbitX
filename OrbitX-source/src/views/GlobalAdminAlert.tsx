@@ -6,9 +6,20 @@ import { motion, AnimatePresence } from "motion/react";
 import { playSound } from "../lib/sound";
 import { useLanguage } from "../context/LanguageContext";
 
-const SEEN_KEY = "orbitx_admin_alerts_seen_v1";
+const SEEN_KEY = "orbitx_admin_alerts_seen_v2";
 
-const getSeenIds = (): Set<string> => {
+const hashText = (s: string): string => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return "h" + Math.abs(h);
+};
+
+type AlertIdentity = string;
+
+const getSeen = (): Set<AlertIdentity> => {
   try {
     const raw = window.localStorage.getItem(SEEN_KEY);
     if (!raw) return new Set();
@@ -18,11 +29,11 @@ const getSeenIds = (): Set<string> => {
   }
 };
 
-const markSeen = (id: string) => {
+const markSeen = (id: AlertIdentity) => {
   try {
-    const ids = getSeenIds();
-    ids.add(id);
-    window.localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(ids)));
+    const seen = getSeen();
+    seen.add(id);
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(seen)));
   } catch {}
 };
 
@@ -39,10 +50,12 @@ export default function GlobalAdminAlert() {
       if (!snap.empty) {
         const data = snap.docs[0].data();
         const id = snap.docs[0].id;
+        const contentKey = hashText(String(data.message || data.text || "").replace(/\s+/g, " ").trim() || id);
+        const seenKey: AlertIdentity = contentKey;
 
-        if (!shownAlertsRef.current.has(id) && !getSeenIds().has(id)) {
-          shownAlertsRef.current.add(id);
-          markSeen(id);
+        if (!shownAlertsRef.current.has(seenKey) && !getSeen().has(seenKey)) {
+          shownAlertsRef.current.add(seenKey);
+          markSeen(seenKey);
           setAlert({ id, ...data });
           try {
             playSound("notification"); // Fallback to whatever sound is available in sound.ts
