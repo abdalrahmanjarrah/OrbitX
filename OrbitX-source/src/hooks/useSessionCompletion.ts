@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, MutableRefObject } from "react";
 import { Room, UserData } from "../shared";
 
 export interface SessionCompletionData {
@@ -13,13 +13,24 @@ export function useSessionCompletion(
   stationId: string,
   room: Room | null,
   user: UserData | null,
-  isJoined: boolean
+  isJoined: boolean,
+  sessionXpAccumRef?: MutableRefObject<number> | null
 ) {
   const [completionData, setCompletionData] = useState<SessionCompletionData | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const prevStatusRef = useRef<string | null>(null);
   const prevStartTimeRef = useRef<any | null>(null);
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (openTimerRef.current) {
+        clearTimeout(openTimerRef.current);
+        openTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!room || !user || !isJoined) {
@@ -66,26 +77,36 @@ export function useSessionCompletion(
     if (isEligible) {
       if (!hasCelebrated) {
         sessionStorage.setItem(storageKey, "true");
-        
-        const duration = room.timerDuration || 25;
-        const estimatedXp = duration;
 
-        setCompletionData({
-          stationId,
-          stationName: room.name || "المحطة الاستكشافية",
-          durationMinutes: duration,
-          xpGained: estimatedXp,
-          completedAt: Date.now()
-        });
-        setIsOpen(true);
+        const duration = room.timerDuration || 25;
+
+        // Wait briefly so the final partial-minute grant and any shield refund
+        // settle, then snapshot the REAL XP that was actually credited by the
+        // station mechanics (grants + refunds − fuel leaks).
+        openTimerRef.current = setTimeout(() => {
+          const xpGained = Math.max(0, Math.round(sessionXpAccumRef?.current || 0));
+
+          setCompletionData({
+            stationId,
+            stationName: room?.name || "محطة الدراسة",
+            durationMinutes: duration,
+            xpGained,
+            completedAt: Date.now()
+          });
+          setIsOpen(true);
+        }, 600);
       }
     }
 
     prevStatusRef.current = currentStatus;
     prevStartTimeRef.current = currentStartTime;
-  }, [room?.timerStatus, room?.startTime, stationId, user?.totalFocusSessions, isJoined]);
+  }, [room?.timerStatus, room?.startTime, stationId, user?.totalFocusSessions, isJoined, sessionXpAccumRef]);
 
   const closeCompletion = () => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
     setIsOpen(false);
     setCompletionData(null);
   };
@@ -96,4 +117,3 @@ export function useSessionCompletion(
     closeCompletion
   };
 }
-

@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "motion/react";
-import { Clock, Navigation, Hourglass, HelpCircle } from "lucide-react";
+import { Clock, Navigation } from "lucide-react";
 
 interface CompletionStatsProps {
   durationMinutes: number;
@@ -8,34 +8,25 @@ interface CompletionStatsProps {
 }
 
 export const CompletionStats: React.FC<CompletionStatsProps> = ({ durationMinutes, stationName }) => {
-  const hours = (durationMinutes / 60).toFixed(2);
-
   const statItems = [
     {
       id: "stat-stationName",
-      label: "المحطة الاستكشافية",
+      label: "المحطة",
       value: stationName,
       icon: <Navigation className="w-5 h-5 text-indigo-400" />,
       delay: 0.35,
     },
     {
       id: "stat-duration",
-      label: "وقت التركيز الصافي",
+      label: "مدة الجولة",
       value: `${durationMinutes} دقيقة`,
       icon: <Clock className="w-5 h-5 text-cyan-400" />,
       delay: 0.4,
     },
-    {
-      id: "stat-hours",
-      label: "حساب الساعات الفلكية",
-      value: `${hours} ساعة`,
-      icon: <Hourglass className="w-5 h-5 text-amber-400" />,
-      delay: 0.45,
-    }
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full my-5" id="completion-stats-grid">
+    <div className="grid grid-cols-2 gap-3 w-full my-5" id="completion-stats-grid">
       {statItems.map((item) => (
         <motion.div
           key={item.id}

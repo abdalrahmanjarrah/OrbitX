@@ -28,7 +28,7 @@ export const CompletionXpPanel: React.FC<CompletionXpPanelProps> = ({ xpGained }
       </motion.div>
 
       <span className="text-[10px] text-cyan-400/80 font-mono font-black tracking-wider uppercase mb-1">
-        إجمالي مكافآت الجولة الكونية
+        الـ XP الفعلي لهذه الجولة
       </span>
 
       <div className="flex items-baseline justify-center gap-1.5 py-1">
@@ -46,7 +46,7 @@ export const CompletionXpPanel: React.FC<CompletionXpPanelProps> = ({ xpGained }
       </div>
 
       <div className="text-[11px] text-gray-500 font-sans mt-0.5 leading-tight">
-        تم تسجيل النقاط بأمان في مصفوفة السفينة وترحيلها لحسابك.
+        هذا هو المبلغ الفعلي المضاف لحسابك (كل دقيقة تركيز كاملة = <span className="text-gray-300 font-bold">1 XP</span>).
       </div>
     </motion.div>
   );

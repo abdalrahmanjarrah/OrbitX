@@ -236,6 +236,7 @@ function StudyRoomContent({
     setShowAlert,
     currentBetRef,
     remainingShieldRef,
+    sessionXpAccumRef,
     studyLinkRef,
     safeUpdateRoom,
     performSafeExit,
@@ -253,7 +254,7 @@ function StudyRoomContent({
     isOpen: isCompletionOpen,
     completionData,
     closeCompletion,
-  } = useSessionCompletion(stationId, room, user, isJoined);
+  } = useSessionCompletion(stationId, room, user, isJoined, sessionXpAccumRef);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);

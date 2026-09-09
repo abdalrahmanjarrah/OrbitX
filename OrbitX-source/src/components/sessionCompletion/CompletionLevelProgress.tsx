@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { UserData } from "../../shared";
+import { getLevelFromXp, getLevelProgress, getXpToNextLevel, MAX_LEVEL } from "../../lib/levelConfig";
 
 interface CompletionLevelProgressProps {
   user: UserData;
@@ -8,24 +9,24 @@ interface CompletionLevelProgressProps {
 
 export const CompletionLevelProgress: React.FC<CompletionLevelProgressProps> = ({ user }) => {
   const currentXp = user.xp || 0;
-  
-  // Calculate Level and Progress
-  // Level = Math.floor(xp / 1000) + 1
-  const level = Math.floor(currentXp / 1000) + 1;
-  const currentLevelStartXp = (level - 1) * 1000;
-  const xpInCurrentLevel = currentXp - currentLevelStartXp;
-  const progressPercent = Math.min(100, Math.max(0, (xpInCurrentLevel / 1000) * 100));
-  const xpNeededForNextLevel = 1000 - xpInCurrentLevel;
+
+  const level = getLevelFromXp(currentXp);
+  const progressPercent = getLevelProgress(currentXp, level);
+  const xpNeededForNextLevel = getXpToNextLevel(level);
 
   return (
     <div className="w-full max-w-sm mx-auto my-4 text-right" id="completion-level-progress-container">
       {/* Top Details Header */}
       <div className="flex items-center justify-between mb-1.5 font-sans">
-        <span className="text-[11px] text-gray-500 font-medium font-sans">
-          متبقي <strong className="text-cyan-400 font-mono font-bold">{xpNeededForNextLevel} XP</strong> للترقية
-        </span>
+        {level < MAX_LEVEL ? (
+          <span className="text-[11px] text-gray-500 font-medium font-sans">
+            متبقي <strong className="text-cyan-400 font-mono font-bold">{xpNeededForNextLevel} XP</strong> للوصول للمستوى الأعلى
+          </span>
+        ) : (
+          <span className="text-[11px] text-amber-400 font-bold font-sans">وصلت لأعلى مستوى! 🏆</span>
+        )}
         <div className="flex items-baseline gap-1">
-          <span className="text-xs text-indigo-400 font-sans font-bold">المستوى</span>
+          <span className="text-xs text-indigo-400 font-sans font-bold">المستوى الحالي</span>
           <span className="text-sm font-black text-white font-mono">{level}</span>
         </div>
       </div>
@@ -45,7 +46,7 @@ export const CompletionLevelProgress: React.FC<CompletionLevelProgressProps> = (
       {/* Footer Indicators */}
       <div className="flex items-center justify-between mt-1 text-[11px] text-gray-600 font-mono">
         <span>{level + 1}</span>
-        <span>{xpInCurrentLevel} / 1000 XP</span>
+        <span>{currentXp.toLocaleString()} XP الحالي</span>
         <span>{level}</span>
       </div>
     </div>

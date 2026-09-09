@@ -319,6 +319,10 @@ export function useSessionEngine(
   const afkFailCountRef = useRef<number>(0);
   const focusSessionKeyRef = useRef<string>("");
   const joinJoinedAtRef = useRef<number | null>(null);
+  // Net XP the station actually credited/drained during the CURRENT focus
+  // segment (grants + refunds − fuel leaks). Reset per segment and handed to
+  // the completion modal so the round summary shows real numbers.
+  const sessionXpAccumRef = useRef(0);
   const xpIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageTime = useRef<number>(0);
   const toggleCallLockRef = useRef<boolean>(false);
@@ -396,6 +400,7 @@ export function useSessionEngine(
           } else {
             try {
               await requestXpGrant(userRef.current.uid, userRef.current.fleetId, null, false, -1, "fuel_leak_tick", true);
+              sessionXpAccumRef.current -= 1;
             } catch (err) {
               console.error("Error draining XP:", err);
             }
@@ -1247,6 +1252,7 @@ await updateDoc(roomRef, {
       if (sessionKey && focusSessionKeyRef.current !== sessionKey) {
         focusSessionKeyRef.current = sessionKey;
         lastXpUpdateTimeRef.current = null;
+        sessionXpAccumRef.current = 0;
         afkFailCountRef.current = 0;
         afkTriggeredRef.current = new Set();
         afkScheduleRef.current = generateAfkSchedule((room?.timerDuration || 25) * 60);
@@ -1337,6 +1343,7 @@ await updateDoc(roomRef, {
           return 0;
         } else {
           lastXpGrantTimestampRef.current = now;
+          sessionXpAccumRef.current += xpToGrant;
           return xpToGrant;
         }
       }
@@ -1592,6 +1599,7 @@ await updateDoc(roomRef, {
 
                 if (totalXpToGive > 0) {
                   requestXpGrant(userRef.current.uid, userRef.current.fleetId, null, false, totalXpToGive, `on_exit_session (refund)`, true);
+                  sessionXpAccumRef.current += totalXpToGive;
                 }
 
                 if (userRef.current.fleetId) {
@@ -1990,6 +1998,7 @@ await updateDoc(roomRef, {
     setShowAlert,
     currentBetRef,
     remainingShieldRef,
+    sessionXpAccumRef,
     studyLinkRef,
     safeUpdateRoom,
     performSafeExit,
