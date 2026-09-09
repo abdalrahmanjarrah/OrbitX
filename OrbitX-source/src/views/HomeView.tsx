@@ -250,14 +250,28 @@ export default function HomeView({
           if (data && data.isChallenge) {
              return;
           }
-          // Hide private stations the user isn't a member of
-          if (data && data.isPrivate && !data.participants?.includes(user.uid)) {
+          // Hide private stations the user isn't a member of (the owner always
+          // sees their own station even while it's still empty).
+          if (
+            data &&
+            data.isPrivate &&
+            data.creatorId !== user.uid &&
+            !data.participants?.includes(user.uid)
+          ) {
             return;
           }
           if (data && data.participants?.length === 0 && data.emptyAt) {
-            const emptyMs = data.emptyAt.toMillis
-              ? data.emptyAt.toMillis()
-              : data.emptyAt.seconds * 1000;
+            // emptyAt can be a Firestore Timestamp ({seconds}), a legacy ISO
+            // string, or — now that rooms live in the relational table — a raw
+            // epoch-milliseconds number coming through the table bridge.
+            const emptyMs =
+              typeof data.emptyAt === "number"
+                ? data.emptyAt
+                : (data.emptyAt as any).toMillis
+                ? (data.emptyAt as any).toMillis()
+                : (data.emptyAt as any).seconds
+                ? (data.emptyAt as any).seconds * 1000
+                : Date.parse(String(data.emptyAt));
             if (now - emptyMs > 300000) {
               deleteDoc(docSnap.ref).catch(() => {});
               return;
