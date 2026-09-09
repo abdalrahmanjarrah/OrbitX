@@ -594,6 +594,86 @@ async function startServer() {
     }
   });
 
+  // ── Error ingestion — تنسيب الأخطاء لملف يراجعه مساعد الكود ──────
+  // المتصفح يرسل الأخطاء المجمّعة (الفلتر) هنا، والسيرفر يكتبها بملف
+  // داخل المشروع (errors/errors.jsonl + latest.json). هيك كل جلسة شغل
+  // نقدر نفتح الملف ونشوف بهمش شو صار — بدون ما نكسر شي أو نرفع GitHub.
+  const ERRORS_DIR = path.join(process.cwd(), "errors");
+  const ERRORS_LOG = path.join(ERRORS_DIR, "errors.jsonl");
+  const ERRORS_LATEST = path.join(ERRORS_DIR, "latest.json");
+
+  app.post("/api/errors/ingest", async (req, res) => {
+    try {
+      if (!rateLimitKey("errors-ingest", 120, 60 * 1000)) {
+        return res.status(429).json({ error: "Rate limit exceeded. Try again later." });
+      }
+      const { errors } = req.body || {};
+      if (!Array.isArray(errors) || errors.length === 0) {
+        return res.json({ success: true, added: 0 });
+      }
+
+      if (!fs.existsSync(ERRORS_DIR)) fs.mkdirSync(ERRORS_DIR, { recursive: true });
+
+      // نجمع أرقام التعريف الموجودة عشان ما نكرّر نفس الخطأ كذا مرة
+      const seen = new Set<string>();
+      if (fs.existsSync(ERRORS_LOG)) {
+        const lines = fs.readFileSync(ERRORS_LOG, "utf8").split("\n");
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const obj = JSON.parse(line);
+            if (obj?.id) seen.add(obj.id);
+          } catch {
+            /* تجاهل السطر التالف */
+          }
+        }
+      }
+
+      const now = new Date().toISOString();
+      const append: string[] = [];
+      let added = 0;
+      for (const e of errors) {
+        if (!e?.id || seen.has(e.id)) continue;
+        seen.add(e.id);
+        append.push(JSON.stringify({ ...e, ingestedAt: now }));
+        added++;
+      }
+
+      if (added > 0) {
+        // احتفظ بآخر 5000 خطأ حتى لا يكبر الملف بلا حدود
+        const prev = fs.existsSync(ERRORS_LOG)
+          ? fs.readFileSync(ERRORS_LOG, "utf8").replace(/\n$/, "")
+          : "";
+        const allLines = prev ? prev.split("\n").filter(Boolean) : [];
+        allLines.push(...append);
+        const kept = allLines.slice(-5000);
+        fs.writeFileSync(ERRORS_LOG, kept.join("\n") + "\n");
+
+        const parsed = kept.map((l) => {
+          try {
+            return JSON.parse(l);
+          } catch {
+            return null;
+          }
+        }).filter(Boolean);
+        fs.writeFileSync(
+          ERRORS_LATEST,
+          JSON.stringify(
+            { generatedAt: now, total: parsed.length, errors: parsed.slice().reverse() },
+            null,
+            2,
+          ),
+        );
+        console.log(`[Errors] ingested ${added} new error(s) → errors/errors.jsonl`);
+      }
+
+      res.json({ success: true, added });
+    } catch (err: any) {
+      console.error("[Errors] ingest failed:", err?.message || err);
+      res.status(500).json({ error: "Failed to ingest" });
+    }
+  });
+
   // Daily habit reminder. Triggered by the in-server scheduler and/or a
   // GitHub Actions cron via ?secret= or the X-Cron-Secret header. Protected
   // so anonymous users cannot spam every subscriber.

@@ -26,6 +26,7 @@ import {
   BarChart3,
   Search,
   Crosshair,
+  Video,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -39,6 +40,22 @@ import {
 } from "recharts";
 import { cn } from "../lib/utils";
 import { db, handleFirestoreError, OperationType } from "../firebase";
+import {
+  getQueueSnapshot,
+  subscribeToErrorQueue,
+  dismissError,
+  clearQueue,
+  downloadQueue,
+  areErrorNotificationsEnabled,
+  setErrorNotificationsEnabled,
+  type QueuedError,
+} from "../lib/errorQueue";
+import {
+  getRecentSession,
+  subscribeToSession,
+  clearSessionTape,
+  type SessionEvent,
+} from "../lib/sessionRecorder";
 import {
   collection,
   doc,
@@ -85,6 +102,19 @@ export default function AdminView({ user }: { user: UserData }) {
   );
   const [errorLogs, setErrorLogs] = useState<any[]>(() => cachedErrorLogs);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const [queue, setQueue] = useState<QueuedError[]>(() => getQueueSnapshot().errors);
+  useEffect(() => {
+    return subscribeToErrorQueue(() => {
+      setQueue(getQueueSnapshot().errors);
+    });
+  }, []);
+  const [errorNotify, setErrorNotify] = useState<boolean>(() => areErrorNotificationsEnabled());
+  const [sessionEvts, setSessionEvts] = useState<SessionEvent[]>(() => getRecentSession(60));
+  useEffect(() => {
+    return subscribeToSession(() => {
+      setSessionEvts(getRecentSession(60));
+    });
+  }, []);
   const [announcementText, setAnnouncementText] = useState("");
   const [updateTitle, setUpdateTitle] = useState("");
   const [updateVersion, setUpdateVersion] = useState("");
@@ -812,6 +842,228 @@ export default function AdminView({ user }: { user: UserData }) {
           </div>
         </div>
 */}
+
+        {/* Error Queue — الفلتر المركزي للأخطاء (حل سريع دونك ما تغوص بالتفاصيل) */}
+        <div className="bg-[#050B14] border border-amber-500/30 p-6 rounded-xl shadow-[0_0_30px_rgba(255,150,0,0.08)_inset] lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-amber-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                <AlertTriangle size={18} /> {isAr ? "فلتر الأخطاء المركزي" : "Central Error Queue"}
+              </h3>
+              <span className="text-[9px] text-amber-300/60 border border-amber-500/30 rounded px-1.5 py-0.5">
+                {isAr ? "متجمعات + عدّادات" : "aggregated"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                {(["critical", "high", "medium", "low"] as const).map((sev) => {
+                  if (!queue.some((e) => e.severity === sev)) return null;
+                  const colors: Record<string, string> = {
+                    critical: "bg-red-500/20 text-red-300 border-red-500/40",
+                    high: "bg-orange-500/20 text-orange-300 border-orange-500/40",
+                    medium: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
+                    low: "bg-sky-500/20 text-sky-300 border-sky-500/40",
+                  };
+                  return (
+                    <span key={sev} className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${colors[sev]}`}>
+                      {sev} {queue.filter((e) => e.severity === sev).length}
+                    </span>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  clearQueue();
+                  showToast("تم مسح فلتر الأخطاء", "success");
+                }}
+                disabled={queue.length === 0}
+                className="text-[10px] bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold transition-colors disabled:opacity-30"
+              >
+                {isAr ? "مسح الفلتر" : "Clear"}
+              </button>
+              <button
+                onClick={() => downloadQueue()}
+                disabled={queue.length === 0}
+                className="text-[10px] bg-sky-600 hover:bg-sky-500 text-white px-2 py-1 rounded font-bold transition-colors disabled:opacity-30"
+              >
+                {isAr ? "تنزيل تقرير" : "Download"}
+              </button>
+              <button
+                onClick={() => {
+                  const next = !errorNotify;
+                  const ok = setErrorNotificationsEnabled(next);
+                  if (ok) {
+                    setErrorNotify(next);
+                    showToast(
+                      next
+                        ? "سأصلك إشعار فوري عند أي خطأ حرج/عالٍ"
+                        : "أُطفئت إشعارات الأخطاء",
+                      "success",
+                    );
+                  }
+                }}
+                className={`text-[10px] px-2 py-1 rounded font-bold transition-colors ${
+                  errorNotify
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                    : "bg-gray-700 hover:bg-gray-600 text-gray-200"
+                }`}
+              >
+                {errorNotify
+                  ? (isAr ? "🔔 الإشعارات مفعّلة" : "🔔 Notifications ON")
+                  : (isAr ? "🔕 فعّل الإشعارات" : "🔕 Enable alerts")}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+            {queue.length === 0 && (
+              <div className="text-center py-8">
+                <Shield size={28} className="mx-auto mb-2 text-emerald-500" />
+                <p className="text-emerald-400 text-xs font-bold">
+                  {isAr ? "الفلتر نظيف. كل شيء تحت السيطرة 🚀" : "Queue is clean. All under control 🚀"}
+                </p>
+              </div>
+            )}
+            {queue.map((e) => (
+              <div
+                key={e.id}
+                className={`bg-[#020308] border p-3 text-xs group ${
+                  e.dismissed ? "opacity-40 border-gray-800" : "border-amber-900/40"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    onClick={() => setExpandedErrorId(expandedErrorId === e.id ? null : e.id)}
+                    className="text-left flex-1 min-w-0"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span
+                        className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold ${
+                          e.severity === "critical"
+                            ? "bg-red-500/25 text-red-300"
+                            : e.severity === "high"
+                              ? "bg-orange-500/25 text-orange-300"
+                              : e.severity === "medium"
+                                ? "bg-yellow-500/20 text-yellow-300"
+                                : "bg-sky-500/20 text-sky-300"
+                        }`}
+                      >
+                        {e.severity}
+                      </span>
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                        {e.source}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-bold">
+                        ×{e.count}
+                      </span>
+                      <span className="text-[9px] text-gray-500">
+                        {formatErrorTime(e.lastAt)}
+                      </span>
+                      {e.dismissed && (
+                        <span className="text-[9px] text-gray-500">({isAr ? "مخفِ" : "dismissed"})</span>
+                      )}
+                    </div>
+                    <div className="text-amber-100 break-words leading-relaxed" dir="ltr">
+                      {e.message}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => dismissError(e.id)}
+                    className="text-gray-500 hover:text-amber-300 shrink-0 mt-1"
+                    title={isAr ? "إخفاء" : "Dismiss"}
+                  >
+                    <Eye size={13} />
+                  </button>
+                </div>
+                {expandedErrorId === e.id && (
+                  <div className="mt-2 pt-2 border-t border-amber-900/40 space-y-1">
+                    {e.stack && (
+                      <pre
+                        className="mt-1 p-2 bg-black/40 rounded text-[9px] text-orange-300 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto custom-scrollbar"
+                        dir="ltr"
+                      >
+                        {e.stack}
+                      </pre>
+                    )}
+                    {e.context && (
+                      <pre className="text-[9px] text-gray-500 overflow-x-auto whitespace-pre-wrap" dir="ltr">
+                        {JSON.stringify(e.context, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* كاميرا الجلسة — شريط واحد يرصد كل ما عمله المستخدم */}
+        <div className="bg-[#050B14] border border-cyan-500/30 p-6 rounded-xl shadow-[0_0_30px_rgba(0,255,255,0.06)_inset] lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                <Video size={18} /> {isAr ? "كاميرا الجلسة (الإثبات)" : "Session Camera"}
+              </h3>
+              <span className="text-[9px] text-cyan-300/60 border border-cyan-500/30 rounded px-1.5 py-0.5">
+                {isAr ? "آخر ما صار بالموقع" : "recent actions"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-cyan-300/60">
+                {sessionEvts.length} {isAr ? "حدث" : "events"}
+              </span>
+              <button
+                onClick={() => {
+                  clearSessionTape();
+                  showToast("تم مسح شريط الكاميرا", "success");
+                }}
+                disabled={sessionEvts.length === 0}
+                className="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded font-bold transition-colors disabled:opacity-30"
+              >
+                {isAr ? "مسح الشريط" : "Clear"}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+            {sessionEvts.length === 0 && (
+              <div className="text-center py-8">
+                <Eye size={26} className="mx-auto mb-2 text-cyan-500" />
+                <p className="text-cyan-400/80 text-xs font-bold">
+                  {isAr
+                    ? "الشريط فاضي حالياً — أي كبسة أو تنقل أو تنبيه رح يُسجّل لحظياً."
+                    : "Tape is empty — clicks, navigation and warnings will be recorded live."}
+                </p>
+              </div>
+            )}
+            {[...sessionEvts].reverse().map((ev, i) => (
+              <div
+                key={`${ev.at}-${i}`}
+                className="flex items-start gap-2 bg-[#020308] border border-cyan-900/30 p-2 text-[11px] group"
+              >
+                <span className="text-[9px] text-gray-500 mt-0.5 shrink-0 tabular-nums">
+                  {formatErrorTime(ev.at)}
+                </span>
+                <span
+                  className={`text-[9px] uppercase px-1.5 py-0.5 rounded shrink-0 font-bold ${
+                    ev.kind === "click"
+                      ? "bg-cyan-500/20 text-cyan-300"
+                      : ev.kind === "console"
+                        ? "bg-amber-500/20 text-amber-300"
+                        : ev.kind === "key"
+                          ? "bg-indigo-500/20 text-indigo-300"
+                          : "bg-gray-600/20 text-gray-300"
+                  }`}
+                >
+                  {ev.kind}
+                </span>
+                <span className="text-gray-300 break-words leading-relaxed" dir="auto">
+                  {ev.detail}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Error Log — كاميرا الأمان للتطبيق */}
         <div className="bg-[#050B14] border border-red-500/30 p-6 rounded-xl shadow-[0_0_30px_rgba(255,0,0,0.1)_inset] lg:col-span-2">

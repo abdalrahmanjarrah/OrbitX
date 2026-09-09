@@ -1,5 +1,6 @@
 import { playSound } from "./lib/sound";
 import { reportError } from "./lib/errorReporter";
+import { enqueueError } from "./lib/errorQueue";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -578,6 +579,14 @@ export class ErrorBoundary extends Component<any, any> {
     void reportError("react-boundary", error, {
       componentStack: errorInfo?.componentStack,
     });
+    // أدخل الخطأ في الفلتر المركزي أيضاً حتى يظهر بلوحة الأدمن
+    try {
+      enqueueError("react-boundary", error, {
+        componentStack: errorInfo?.componentStack,
+      });
+    } catch {
+      /* تتجاهل ولا تكسر */
+    }
   }
 
   render() {

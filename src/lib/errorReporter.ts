@@ -18,6 +18,8 @@ import {
   increment,
 } from "../supabaseAdapter";
 import { authClient } from "../supabaseAuth";
+import { enqueueError } from "./errorQueue";
+import { installSessionRecorder, recordEvent } from "./sessionRecorder";
 
 const ERRORS_COLLECTION = "errors";
 
@@ -65,6 +67,18 @@ function normalizeError(error: any): { message: string; stack?: string } {
   }
 }
 
+function safeStringify(value: any): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 /**
  * يسجّل خطأ في قاعدة البيانات. آمن للاستدعاء من أي مكان.
  */
@@ -74,6 +88,10 @@ export async function reportError(
   context?: Record<string, unknown>,
 ): Promise<void> {
   try {
+    // أولاً: ضع الخطأ في الفلتر المحلي فوراً — حتى لو فشل الإرسال للقاعدة
+    // أو لم تتوفر الشبكة، يبقى الخطأ متجمعاً ومرتباً للأدمن.
+    enqueueError(source, error, context);
+
     if (!isDevEnabled()) return;
     const { message, stack } = normalizeError(error);
     if (!message) return;
@@ -130,6 +148,55 @@ export function installGlobalErrorCapture(): void {
   if (captureInstalled) return;
   captureInstalled = true;
 
+  // "الكاميرا الواحدة" — تثبّت مصادر الرصد الموحدة (كبسات/تنقل/ملاحظات)
+  try {
+    installSessionRecorder();
+  } catch {
+    /* تجاهل */
+  }
+
+  // شبكة الكونسول الموحدة: أي console.error من أي جزء يدخل الفلتر،
+  // وأي console.warn يُسجّل بالشريط (لمشاهدة القرار). بدون recursion.
+  try {
+    const origError = console.error;
+    const origWarn = console.warn;
+    console.error = function (...args: any[]) {
+      try {
+        const text = args
+          .map((a) =>
+            a instanceof Error ? a.message : typeof a === "string" ? a : safeStringify(a),
+          )
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 500);
+        if (text) {
+          recordEvent("console", `error ${text.slice(0, 140)}`);
+          void enqueueError("console:error", new Error(text), undefined);
+        }
+      } catch {
+        /* لا نكسر بسبب الرصد */
+      }
+      return origError.apply(console, args);
+    };
+    console.warn = function (...args: any[]) {
+      try {
+        const text = args
+          .map((a) =>
+            a instanceof Error ? a.message : typeof a === "string" ? a : safeStringify(a),
+          )
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 200);
+        if (text) recordEvent("console", `warn ${text.slice(0, 140)}`);
+      } catch {
+        /* لا نكسر بسبب الرصد */
+      }
+      return origWarn.apply(console, args);
+    };
+  } catch {
+    /* لا نكسر لو تعطّلت مراقبة الكونسول */
+  }
+
   try {
     authClient.getUser().then(({ data }) => {
       currentUser = {
@@ -153,10 +220,17 @@ export function installGlobalErrorCapture(): void {
 
   window.addEventListener("error", (event) => {
     const err = event.error || event.message;
+    // الفلتر المحلي يستقبل الخطأ أولاً (مبدأ "بلع المشكلة").
+    enqueueError("window-error", err, {
+      lineno: event.lineno,
+      colno: event.colno,
+      file: event.filename,
+    });
     void reportError("window-error", err, { lineno: event.lineno, colno: event.colno, file: event.filename });
   });
 
   window.addEventListener("unhandledrejection", (event) => {
+    enqueueError("unhandledrejection", event.reason);
     void reportError("unhandledrejection", event.reason);
   });
 

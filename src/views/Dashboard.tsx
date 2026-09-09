@@ -83,6 +83,7 @@ import StarBackground from "../components/StarBackground";
 import { cn } from "../lib/utils";
 import { showToast } from "../lib/cosmicUI";
 import { buildInviteLink } from "../lib/share";
+import FeatureBoundary from "../components/FeatureBoundary";
 import {
   auth,
   db,
@@ -276,12 +277,14 @@ export default function Dashboard({
           </p>
         </div>
       }>
-        <StudyRoomView
-          user={user}
-          stationId={activeStation}
-          onExit={() => setActiveStation(null)}
-          onSelectUser={setSelectedUserId}
-        />
+        <FeatureBoundary name="station">
+          <StudyRoomView
+            user={user}
+            stationId={activeStation}
+            onExit={() => setActiveStation(null)}
+            onSelectUser={setSelectedUserId}
+          />
+        </FeatureBoundary>
       </React.Suspense>
     );
   }
@@ -594,19 +597,71 @@ export default function Dashboard({
                 </p>
               </div>
             }>
-              {activeTab === "home" && <HomeView user={user} onEnterStation={(id) => setActiveStation(id)} onSelectUser={setSelectedUserId} />}
-              {activeTab === "search" && <UserSearchView user={user} onSelectUser={setSelectedUserId} />}
-              {activeTab === "profile" && <ProfileView user={user} />}
-              {activeTab === "discussions" && <DiscussionsView user={user} />}
-              {activeTab === "schedule" && <ScheduleView user={user} />}
-              {activeTab === "challenges" && <ChallengesHubView user={user} onSelectUser={setSelectedUserId} />}
-              {activeTab === "leaderboard" && <LeaderboardView user={user} onSelectUser={setSelectedUserId} />}
-              {activeTab === "admin" && <AdminView user={user} />}
-              {activeTab === "support" && <SupportView user={user} />}
-              {activeTab === "awareness" && <AwarenessView user={user} />}
-              {activeTab === "blackholes" && <BlackHolesView user={user} />}
-              {activeTab === "fleets" && <FleetsView user={user} />}
-              {activeTab === "systemmap" && isMapOwner && <SystemMapView />}
+              {activeTab === "home" && (
+                <FeatureBoundary name="home">
+                  <HomeView user={user} onEnterStation={(id) => setActiveStation(id)} onSelectUser={setSelectedUserId} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "search" && (
+                <FeatureBoundary name="search">
+                  <UserSearchView user={user} onSelectUser={setSelectedUserId} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "profile" && (
+                <FeatureBoundary name="profile">
+                  <ProfileView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "discussions" && (
+                <FeatureBoundary name="discussions">
+                  <DiscussionsView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "schedule" && (
+                <FeatureBoundary name="schedule">
+                  <ScheduleView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "challenges" && (
+                <FeatureBoundary name="challenges">
+                  <ChallengesHubView user={user} onSelectUser={setSelectedUserId} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "leaderboard" && (
+                <FeatureBoundary name="leaderboard">
+                  <LeaderboardView user={user} onSelectUser={setSelectedUserId} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "admin" && (
+                <FeatureBoundary name="admin">
+                  <AdminView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "support" && (
+                <FeatureBoundary name="support">
+                  <SupportView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "awareness" && (
+                <FeatureBoundary name="awareness">
+                  <AwarenessView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "blackholes" && (
+                <FeatureBoundary name="blackholes">
+                  <BlackHolesView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "fleets" && (
+                <FeatureBoundary name="fleets">
+                  <FleetsView user={user} />
+                </FeatureBoundary>
+              )}
+              {activeTab === "systemmap" && isMapOwner && (
+                <FeatureBoundary name="systemmap">
+                  <SystemMapView />
+                </FeatureBoundary>
+              )}
             </React.Suspense>
           </motion.div>
         </AnimatePresence>
