@@ -2,121 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {uid}
-    // Fields:
-    //   - uid: string (required, immutable)
-    //   - displayName: string (required, 1-100 chars)
-    //   - email: string (required, immutable, PII)
-    //   - photoURL: string (required, URL)
-    //   - bio: string (optional, 0-500 chars)
-    //   - level: number (required, positive)
-    //   - xp: number (required, positive)
-    //   - role: string (required, enum: ['admin', 'user'])
-    //   - hearts: number (required, 0-3)
-    //   - friendsCount: number (optional, positive)
-    //   - banned: boolean (optional)
-    //   - currentActivity: string (optional, 0-100 chars)
-    //
-    // Collection: users/{uid}/friends
-    // Document ID: {friendId}
-    // Fields:
-    //   - timestamp: timestamp (required)
-    //
-    // Collection: users/{uid}/schedule
-    // Document ID: {itemId}
-    // Fields:
-    //   - day: string (required)
-    //   - time: string (required)
-    //   - task: string (required)
-    //   - userId: string (required, immutable)
-    //
-    // Collection: rooms
-    // Document ID: {roomId}
-    // Fields:
-    //   - name: string (required, 1-100 chars)
-    //   - task: string (required, 1-200 chars)
-    //   - creatorId: string (required, immutable)
-    //   - creatorName: string (required)
-    //   - participants: list (required, strings)
-    //   - maxParticipants: number (required)
-    //   - timerStatus: string (required, enum: ['idle', 'focus', 'break'])
-    //   - timerDuration: number (required)
-    //   - breakDuration: number (required)
-    //   - startTime: timestamp (optional)
-    //   - createdAt: timestamp (required, immutable)
-    //   - dailyUrl: string (optional, URL)
-    //
-    // Collection: rooms/{roomId}/messages
-    // Document ID: {messageId}
-    // Fields:
-    //   - text: string (required, 1-1000 chars)
-    //   - userId: string (required, immutable)
-    //   - userName: string (required)
-    //   - userPhoto: string (optional)
-    //   - timestamp: timestamp (required, immutable)
-    //   - type: string (required, enum: ['text', 'image', 'video', 'file'])
-    //   - fileUrl: string (optional)
-    //
-    // Collection: advices
-    // Document ID: {adviceId}
-    // Fields:
-    //   - text: string (required, 1-500 chars)
-    //   - adminId: string (required, immutable)
-    //   - timestamp: timestamp (required, immutable)
-    //
-    // Collection: exhibitions
-    // Document ID: {exhibitionId}
-    // Fields:
-    //   - url: string (required, URL)
-    //   - userId: string (required, immutable)
-    //   - userName: string (required)
-    //   - timestamp: timestamp (required, immutable)
-    //
-    // Collection: suggestions
-    // Document ID: {suggestionId}
-    // Fields:
-    //   - text: string (required, 1-1000 chars)
-    //   - userId: string (required, immutable)
-    //   - userName: string (required)
-    //   - timestamp: timestamp (required, immutable)
-    //   - reply: string (optional, 0-1000 chars)
-    //
-    // Collection: global_chat
-    // Document ID: {messageId}
-    // Fields:
-    //   - text: string (required, 1-1000 chars)
-    //   - userId: string (required, immutable)
-    //   - userName: string (required)
-    //   - userPhoto: string (optional)
-    //   - timestamp: timestamp (required, immutable)
-    //   - type: string (required, enum: ['text', 'image', 'video', 'file'])
-    //
-    // Collection: discussions
-    // Document ID: {discussionId}
-    // Fields:
-    //   - title: string (required, 1-200 chars)
-    //   - content: string (required, 1-5000 chars)
-    //   - userId: string (required, immutable)
-    //   - userName: string (required)
-    //   - userPhoto: string (optional)
-    //   - timestamp: timestamp (required, immutable)
-    //   - repliesCount: number (required)
-    //
-    // Collection: discussions/{discussionId}/replies
-    // Document ID: {replyId}
-    // Fields:
-    //   - text: string (required, 1-2000 chars)
-    //   - userId: string (required, immutable)
-    //   - userName: string (required)
-    //   - userPhoto: string (optional)
-    //   - timestamp: timestamp (required, immutable)
-    //
-    // ===============================================================
+    // Global Catch-all Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
     // Helper Functions
@@ -131,13 +20,19 @@ service cloud.firestore {
     }
 
     function isNotBanned() {
-      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.banned == false;
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('banned', false) == false;
     }
 
     function isAdmin() {
       return isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin') ||
-        ('email' in request.auth.token && (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com"))
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin') ||
+        ('email' in request.auth.token && 
+         (request.auth.token.email == "lumafashionhq@gmail.com" || 
+          request.auth.token.email == "abdalrahmanjarrah94@gmail.com" || 
+          request.auth.token.email == "abdalrahmanjarrah1@gmail.com") && 
+         request.auth.token.email_verified == true)
       );
     }
 
@@ -145,20 +40,17 @@ service cloud.firestore {
       return request.resource.data.keys().hasAll(fields);
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
     function isValidUrl(url) {
-      return url == null || (url is string && url.size() <= 800000 && (url == "" || url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:.*")));
+      return url == null || url == "" || (url is string && url.size() <= 800000 && (url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:.*")));
     }
 
     function isRecent(ts) {
-      return ts is timestamp && math.abs(request.time.toMillis() - ts.toMillis()) < 5 * 60 * 1000;
+      return (ts is timestamp && ts >= request.time - duration.value(5, 'm') && ts <= request.time + duration.value(5, 'm')) ||
+             (ts is number && ts >= request.time.toMillis() - 5 * 60 * 1000 && ts <= request.time.toMillis() + 5 * 60 * 1000);
     }
 
     // ===============================================================
@@ -174,7 +66,7 @@ service cloud.firestore {
              data.level is number && data.level >= 1 &&
              data.xp is number && data.xp >= 0 &&
              data.role in ['admin', 'user'] &&
-             data.hearts is number && data.hearts >= 0 && data.hearts <= 3 &&
+             (!('hearts' in data) || (data.hearts is number && data.hearts >= 0 && data.hearts <= 5)) &&
              (!('friendsCount' in data) || (data.friendsCount is number && data.friendsCount >= 0)) &&
              (!('banned' in data) || data.banned is bool) &&
              (!('currentActivity' in data) || (data.currentActivity is string && data.currentActivity.size() <= 100)) &&
@@ -187,7 +79,13 @@ service cloud.firestore {
              (!('lastStudyDate' in data) || data.lastStudyDate is string) &&
              (!('plants' in data) || data.plants is list) &&
              (!('badges' in data) || data.badges is list) &&
-             (!('streak' in data) || data.streak is number);
+             (!('streak' in data) || data.streak is number) &&
+             (!('fleetId' in data) || data.fleetId is string) &&
+             (!('fleetInvites' in data) || data.fleetInvites is list) &&
+             (!('lastActiveDate' in data) || data.lastActiveDate is string) &&
+             (!('completedWizard' in data) || data.completedWizard is bool) &&
+             (!('dailyFocusTarget' in data) || data.dailyFocusTarget is number) &&
+             (!('lastXpUpdate' in data) || (data.lastXpUpdate is number || data.lastXpUpdate is string));
     }
 
     function isValidPublicProfile(data) {
@@ -198,7 +96,7 @@ service cloud.firestore {
              data.level is number && data.level >= 1 &&
              data.xp is number && data.xp >= 0 &&
              (!('friendsCount' in data) || (data.friendsCount is number && data.friendsCount >= 0)) &&
-             data.hearts is number && data.hearts >= 0 && data.hearts <= 3 &&
+             (!('hearts' in data) || (data.hearts is number && data.hearts >= 0 && data.hearts <= 5)) &&
              data.role in ['admin', 'user'] &&
              (!('banned' in data) || data.banned is bool) &&
              (!('currentActivity' in data) || (data.currentActivity is string && data.currentActivity.size() <= 100)) &&
@@ -211,7 +109,14 @@ service cloud.firestore {
              (!('lastStudyDate' in data) || data.lastStudyDate is string) &&
              (!('plants' in data) || data.plants is list) &&
              (!('badges' in data) || data.badges is list) &&
-             (!('streak' in data) || data.streak is number);
+             (!('streak' in data) || data.streak is number) &&
+             (!('fleetId' in data) || data.fleetId is string) &&
+             (!('fleetInvites' in data) || data.fleetInvites is list) &&
+             (!('lastActiveDate' in data) || data.lastActiveDate is string) &&
+             (!('completedWizard' in data) || data.completedWizard is bool) &&
+             (!('dailyFocusTarget' in data) || data.dailyFocusTarget is number) &&
+             (!('lastActiveTime' in data) || (data.lastActiveTime is number || data.lastActiveTime is string || data.lastActiveTime is timestamp)) &&
+             (!('lastXpUpdate' in data) || (data.lastXpUpdate is number || data.lastXpUpdate is string));
     }
 
     function isValidRoom(data) {
@@ -224,17 +129,20 @@ service cloud.firestore {
              data.timerStatus in ['idle', 'focus', 'break'] &&
              data.timerDuration is number &&
              data.breakDuration is number &&
-             (!('startTime' in data) || data.startTime is timestamp) &&
-             data.createdAt is timestamp &&
-             (!('dailyUrl' in data) || isValidUrl(data.dailyUrl));
+             (!('startTime' in data) || data.startTime is timestamp || data.startTime == null) &&
+             (data.createdAt is timestamp || data.createdAt is number) &&
+             (!('dailyUrl' in data) || isValidUrl(data.dailyUrl)) &&
+             (!('accumulatedFocusSeconds' in data) || data.accumulatedFocusSeconds is number) &&
+             (!('emptyAt' in data) || data.emptyAt is timestamp || data.emptyAt == null) &&
+             (!('hostId' in data) || data.hostId is string);
     }
 
     function isValidMessage(data) {
-      return data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+      return data.text is string && data.text.size() >= 1 && data.text.size() <= 2000000 &&
              data.userId is string &&
              data.userName is string &&
              (!('userPhoto' in data) || isValidUrl(data.userPhoto)) &&
-             data.timestamp is timestamp &&
+             (data.timestamp is timestamp || data.timestamp is number) &&
              data.type in ['text', 'image', 'video', 'file'] &&
              (!('fileUrl' in data) || isValidUrl(data.fileUrl));
     }
@@ -254,44 +162,125 @@ service cloud.firestore {
              data.userId is string &&
              data.userName is string &&
              (!('userPhoto' in data) || isValidUrl(data.userPhoto)) &&
-             data.timestamp is timestamp &&
-             data.repliesCount is number && data.repliesCount >= 0;
+             (data.timestamp is timestamp || data.timestamp is number) &&
+             data.repliesCount is number && data.repliesCount >= 0 &&
+             (!('category' in data) || data.category is string) &&
+             (!('likesCount' in data) || data.likesCount is number) &&
+             (!('lastActivity' in data) || data.lastActivity is timestamp || data.lastActivity is number);
     }
 
     function isValidChallenge(data) {
       return data.challengerId is string &&
              data.challengerName is string &&
              data.challengedId is string &&
-             data.status in ['pending', 'accepted', 'declined'] &&
-             data.createdAt is timestamp;
+             (!('challengedName' in data) || data.challengedName is string) &&
+             data.status in ['pending', 'accepted', 'declined', 'active', 'completed'] &&
+             (data.createdAt is timestamp || data.createdAt is number) &&
+             (!('durationMinutes' in data) || data.durationMinutes is number) &&
+             (!('progressPlayer1' in data) || data.progressPlayer1 is number) &&
+             (!('progressPlayer2' in data) || data.progressPlayer2 is number) &&
+             (!('rewardsClaimed' in data) || data.rewardsClaimed is list) &&
+             (!('winnerId' in data) || data.winnerId is string);
+    }
+
+    function isValidFleet(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.description is string && data.description.size() <= 500 &&
+             data.ownerId is string &&
+             data.members is list && data.members.size() <= 10 &&
+             (!('coAdmins' in data) || (data.coAdmins is list && data.coAdmins.size() <= 5)) &&
+             (!('totalFocusHours' in data) || data.totalFocusHours is number) &&
+             data.xp is number &&
+             (data.createdAt is timestamp || data.createdAt is number);
+    }
+
+    function isValidAppUpdate(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+             data.version is string && data.version.size() >= 1 && data.version.size() <= 100 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 10000 &&
+             (data.timestamp is number || data.timestamp is timestamp) &&
+             data.adminId is string;
+    }
+
+    function isValidSupportTicket(data) {
+      return data.userId is string &&
+             data.userName is string &&
+             data.status in ['open', 'closed'] &&
+             data.lastMessage is string &&
+             (data.updatedAt is timestamp || data.updatedAt is number) &&
+             data.messages is list;
     }
 
     // ===============================================================
-    // Rules
+    // Collection Rules
     // ===============================================================
 
+    match /test/{docId} {
+      allow read: if true;
+    }
+
     match /users/{userId} {
-      // Restrict read to owner/admin because it contains email (PII)
       allow read: if isOwner(userId) || isAdmin();
       
       allow create: if isOwner(userId) && 
                       isValidUser(request.resource.data) && 
-                      (request.resource.data.get('role', 'user') == 'user' || 
-                       (request.resource.data.get('role', 'user') == 'admin' && 
-                        (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com") && 
-                        request.auth.token.email_verified == true)) &&
-                      isRecent(request.time);
+                      (
+                        // Standard User Creation - Prevent starting with millions of coins or admin privileges
+                        (
+                          request.resource.data.get('role', 'user') == 'user' &&
+                          request.resource.data.get('banned', false) == false &&
+                          request.resource.data.get('xp', 0) == 0 &&
+                          request.resource.data.get('level', 1) == 1
+                        ) ||
+                        // Admin Bootstrapping
+                        (
+                          request.resource.data.get('role', 'user') == 'admin' &&
+                          (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com" || request.auth.token.email == "abdalrahmanjarrah1@gmail.com") && 
+                          request.auth.token.email_verified == true
+                        )
+                      ) &&
+                      isRecent(request.resource.data.get('lastXpUpdate', request.time));
                       
-      allow update: if (isOwner(userId) && 
+      allow update: if (
+                        isAdmin()
+                      ) || 
+                      (
+                        isOwner(userId) && 
                         isValidUser(request.resource.data) && 
-                        request.resource.data.get('role', 'user') == resource.data.get('role', 'user') && // Cannot change role
-                        request.resource.data.email == resource.data.email && // Cannot change email
-                        request.resource.data.uid == resource.data.uid) || 
-                      isAdmin();
+                        request.resource.data.uid == resource.data.uid &&
+                        request.resource.data.email == resource.data.email &&
+                        
+                        // Strict immutability of system and admin settings keys
+                        request.resource.data.get('role', 'user') == resource.data.get('role', 'user') && 
+                        request.resource.data.get('banned', false) == resource.data.get('banned', false) &&
+                        
+                        // XP Progression Anti-Cheat Guard (No giant injections, max 200 positive increment)
+                        (!('xp' in request.resource.data) || !('xp' in resource.data) || (
+                          request.resource.data.xp <= resource.data.xp + 200 &&
+                          request.resource.data.xp >= resource.data.xp - 5000
+                        )) &&
+                        
+                        // Level mathematical anchoring to XP
+                        (!('level' in request.resource.data) || (
+                          request.resource.data.level * 1000 > request.resource.data.xp &&
+                          (request.resource.data.level - 1) * 1000 <= request.resource.data.xp
+                        )) &&
+                        
+                        // Coins Progression Anti-Cheat Guard (No printing money, max 100 positive increment)
+                        (!('coins' in request.resource.data) || !('coins' in resource.data) || (
+                          request.resource.data.coins <= resource.data.coins + 100
+                        ))
+                      ) ||
+                      (
+                        // Allow friends count update relational flow
+                        isAuthenticated() && 
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendsCount']) &&
+                        (request.resource.data.friendsCount == resource.data.friendsCount + 1 || request.resource.data.friendsCount == resource.data.friendsCount - 1)
+                      );
 
       match /friends/{friendId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if isOwner(userId) || isAdmin();
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId) || request.auth.uid == friendId || isAdmin();
       }
 
       match /schedule/{itemId} {
@@ -305,65 +294,127 @@ service cloud.firestore {
         allow update: if isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
         allow delete: if isOwner(userId) || isAdmin();
       }
-
     }
 
     match /profiles/{userId} {
-      // Public profiles are readable by any authenticated user
       allow read: if isAuthenticated();
       
-      // Only the owner can create/update their public profile
       allow create: if isOwner(userId) && 
                       isValidPublicProfile(request.resource.data) &&
+                      (
+                        (
+                          request.resource.data.get('role', 'user') == 'user' &&
+                          request.resource.data.get('banned', false) == false &&
+                          request.resource.data.get('xp', 0) == 0 &&
+                          request.resource.data.get('level', 1) == 1
+                        ) ||
+                        (
+                          request.resource.data.get('role', 'user') == 'admin' &&
+                          (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com" || request.auth.token.email == "abdalrahmanjarrah1@gmail.com") && 
+                          request.auth.token.email_verified == true
+                        )
+                      ) &&
                       isRecent(request.time);
                       
-      allow update: if (isOwner(userId) && 
+      allow update: if (
+                        isAdmin()
+                      ) || 
+                      (
+                        isOwner(userId) && 
                         isValidPublicProfile(request.resource.data) &&
-                        request.resource.data.uid == resource.data.uid) || 
-                      isAdmin();
+                        request.resource.data.uid == resource.data.uid &&
+                        
+                        // Strict immutability of system and admin settings keys
+                        request.resource.data.get('role', 'user') == resource.data.get('role', 'user') && 
+                        request.resource.data.get('banned', false) == resource.data.get('banned', false) &&
+                        
+                        // XP Progression Anti-Cheat Guard
+                        (!('xp' in request.resource.data) || !('xp' in resource.data) || (
+                          request.resource.data.xp <= resource.data.xp + 200 &&
+                          request.resource.data.xp >= resource.data.xp - 5000
+                        )) &&
+                        
+                        // Level mathematical anchoring to XP
+                        (!('level' in request.resource.data) || (
+                          request.resource.data.level * 1000 > request.resource.data.xp &&
+                          (request.resource.data.level - 1) * 1000 <= request.resource.data.xp
+                        )) &&
+                        
+                        // Coins Progression Anti-Cheat Guard
+                        (!('coins' in request.resource.data) || !('coins' in resource.data) || (
+                          request.resource.data.coins <= resource.data.coins + 100
+                        ))
+                      );
     }
 
     match /rooms/{roomId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isNotBanned() && 
                       isValidRoom(request.resource.data) && 
-                      request.resource.data.get('creatorId', '') == request.auth.uid &&
-                      (request.resource.data.createdAt == request.time || isRecent(request.resource.data.createdAt));
-      allow update: if (isAuthenticated() && 
+                      request.resource.data.creatorId == request.auth.uid &&
+                      isRecent(request.resource.data.createdAt);
+                      
+      allow update: if (
+                        isAdmin()
+                      ) || 
+                      (
+                        isAuthenticated() && 
                         isValidRoom(request.resource.data) && 
                         (
-                          // Creator can update everything
-                          request.auth.uid == resource.data.get('creatorId', '') || 
-                          // Participants can ONLY update the participants list (join/leave)
+                          // Creator can update everything except static parameters
                           (
-                            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants']) &&
+                            request.auth.uid == resource.data.creatorId &&
+                            request.resource.data.creatorId == resource.data.creatorId &&
+                            request.resource.data.createdAt == resource.data.createdAt
+                          ) || 
+                          // Active Room Participant (Join, Leave, Timer control transitions)
+                          (
                             (
-                              // Joining: Only adding self
+                              // Leave Room / Join Room actions
+                              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'emptyAt', 'hostId', 'timerStatus']) &&
                               (
-                                request.resource.data.participants.hasAll(resource.data.participants) &&
-                                request.resource.data.participants.size() == resource.data.participants.size() + 1 &&
-                                request.auth.uid in request.resource.data.participants &&
-                                !(request.auth.uid in resource.data.participants) &&
-                                request.resource.data.participants.size() <= resource.data.maxParticipants
-                              ) ||
-                              // Leaving: Only removing self
-                              (
-                                resource.data.participants.hasAll(request.resource.data.participants) &&
-                                resource.data.participants.size() == request.resource.data.participants.size() + 1 &&
-                                !(request.auth.uid in request.resource.data.participants) &&
-                                request.auth.uid in resource.data.participants
+                                // Joining: Only adding self to participants list
+                                (
+                                  request.resource.data.participants.hasAll(resource.data.participants) &&
+                                  request.resource.data.participants.size() == resource.data.participants.size() + 1 &&
+                                  request.auth.uid in request.resource.data.participants &&
+                                  !(request.auth.uid in resource.data.participants) &&
+                                  request.resource.data.participants.size() <= resource.data.maxParticipants
+                                ) ||
+                                // Leaving: Only removing self from participants list
+                                (
+                                  resource.data.participants.hasAll(request.resource.data.participants) &&
+                                  resource.data.participants.size() == request.resource.data.participants.size() + 1 &&
+                                  !(request.auth.uid in request.resource.data.participants) &&
+                                  request.auth.uid in resource.data.participants
+                                )
                               )
+                            ) ||
+                            (
+                               // Timer Control: Any participant can operate the timer if they are currently inside participants list
+                               request.auth.uid in resource.data.participants &&
+                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timerStatus', 'startTime', 'accumulatedFocusSeconds'])
                             )
                           )
-                        )) || 
-                      isAdmin();
+                        )
+                      );
+                      
       allow delete: if (isAuthenticated() && request.auth.uid == resource.data.creatorId) || isAdmin();
+
+      match /typing/{userId} {
+        allow read: if isAuthenticated();
+        // Typing allowed only for participants of the current room
+        allow write: if isAuthenticated() && request.auth.uid == userId && 
+                        (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.participants);
+      }
 
       match /messages/{messageId} {
         allow read: if isAuthenticated();
+        // Messaging allowed only for active participants
         allow create: if isAuthenticated() && isNotBanned() && 
+                        (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.participants) &&
                         isValidMessage(request.resource.data) && 
-                        request.resource.data.userId == request.auth.uid &&
+                        (request.resource.data.userId == request.auth.uid || request.resource.data.userId == 'system') &&
                         isRecent(request.resource.data.timestamp);
         allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
       }
@@ -373,6 +424,16 @@ service cloud.firestore {
         allow create: if isAuthenticated() && isNotBanned() && request.resource.data.sender == request.auth.uid;
         allow delete: if isAuthenticated() && (resource.data.receiver == request.auth.uid || resource.data.sender == request.auth.uid);
       }
+    }
+
+    match /system/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /chat_typing/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
     match /advices/{adviceId} {
@@ -387,7 +448,7 @@ service cloud.firestore {
                       isValidUrl(request.resource.data.url) &&
                       request.resource.data.userId == request.auth.uid &&
                       isRecent(request.resource.data.timestamp);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
 
     match /suggestions/{suggestionId} {
@@ -407,9 +468,12 @@ service cloud.firestore {
                       isValidMessage(request.resource.data) && 
                       request.resource.data.userId == request.auth.uid &&
                       isRecent(request.resource.data.timestamp);
-      allow update: if isAuthenticated() && 
-                      request.auth.uid == resource.data.userId && 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto']);
+      allow update: if isAuthenticated() && isNotBanned() && (
+                      (request.auth.uid == resource.data.userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto'])) ||
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) ||
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments']) ||
+                      isAdmin()
+                    );
       allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
     }
 
@@ -426,9 +490,14 @@ service cloud.firestore {
                       isValidDiscussion(request.resource.data) && 
                       request.resource.data.userId == request.auth.uid &&
                       isRecent(request.resource.data.timestamp);
-      allow update: if isAuthenticated() && 
-                      request.auth.uid == resource.data.userId && 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto']);
+      allow update: if isAuthenticated() && isNotBanned() && (
+                      (request.auth.uid == resource.data.userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userPhoto'])) ||
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likesCount']) && (request.resource.data.likesCount == resource.data.likesCount + 1 || request.resource.data.likesCount == resource.data.likesCount - 1)) ||
+                      (request.resource.data.diff(resource.data).affectedKeys().hasAny(['repliesCount']) && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['repliesCount', 'lastActivity']) && 
+                       (request.resource.data.repliesCount == resource.data.repliesCount + 1 || request.resource.data.repliesCount == resource.data.repliesCount - 1)) ||
+                      isAdmin()
+                    );
       allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
 
       match /replies/{replyId} {
@@ -445,17 +514,6 @@ service cloud.firestore {
       }
     }
 
-    function isValidFleet(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.description is string && data.description.size() <= 500 &&
-             data.ownerId is string &&
-             data.members is list && data.members.size() <= 10 &&
-             (!('coAdmins' in data) || (data.coAdmins is list && data.coAdmins.size() <= 5)) &&
-             data.totalFocusHours is number &&
-             data.xp is number &&
-             data.createdAt is timestamp;
-    }
-
     match /fleets/{fleetId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isNotBanned() &&
@@ -466,17 +524,21 @@ service cloud.firestore {
       allow update: if isAuthenticated() && isNotBanned() &&
                       isValidFleet(request.resource.data) &&
                       (
-                        // Owner can update anything (?) Wait, mostly members, just allow members to update xp/hours
-                        (request.auth.uid in resource.data.members && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['xp', 'totalFocusHours'])) ||
-                        // Adding/removing members
-                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
+                        isAdmin() ||
+                        // Owner can update everything
+                        (request.auth.uid == resource.data.ownerId) ||
+                        // Active Member can update Fleet XP or Focus Hours (with progression guards)
+                        (
+                          request.auth.uid in resource.data.members && 
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['xp', 'totalFocusHours']) &&
+                          (!('xp' in request.resource.data) || (request.resource.data.xp <= resource.data.xp + 200))
+                        ) ||
+                        // Adding/removing members from fleet
+                        (
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
                           (
-                            // Join
                             (request.resource.data.members.size() == resource.data.members.size() + 1 && request.auth.uid in request.resource.data.members && !(request.auth.uid in resource.data.members)) ||
-                            // Leave
-                            (resource.data.members.size() == request.resource.data.members.size() + 1 && !(request.auth.uid in request.resource.data.members) && request.auth.uid in resource.data.members) ||
-                            // Owner kicks member
-                            (request.auth.uid == resource.data.ownerId)
+                            (resource.data.members.size() == request.resource.data.members.size() + 1 && !(request.auth.uid in request.resource.data.members) && request.auth.uid in resource.data.members)
                           )
                         )
                       );
@@ -487,7 +549,7 @@ service cloud.firestore {
         allow create: if isAuthenticated() && isNotBanned() &&
                         (request.auth.uid in get(/databases/$(database)/documents/fleets/$(fleetId)).data.members) &&
                         isValidMessage(request.resource.data) &&
-                        request.resource.data.userId == request.auth.uid &&
+                        (request.resource.data.userId == request.auth.uid || request.resource.data.userId == 'system') &&
                         isRecent(request.resource.data.timestamp);
         allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
       }
@@ -499,10 +561,67 @@ service cloud.firestore {
                       isValidChallenge(request.resource.data) &&
                       request.resource.data.challengerId == request.auth.uid &&
                       isRecent(request.resource.data.createdAt);
+                      
       allow update: if isAuthenticated() &&
                       isValidChallenge(request.resource.data) &&
-                      request.resource.data.challengedId == request.auth.uid &&
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+                      (
+                        isAdmin() ||
+                        // Action 1: Status Transitions (Accept, Decline, Complete)
+                        (
+                          request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'winnerId']) &&
+                          (
+                            // Accpet / Decline: can only be done by challenged player
+                            (request.auth.uid == resource.data.challengedId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+                            // Complete: can be done by active participant
+                            (
+                              (request.auth.uid == resource.data.challengerId || request.auth.uid == resource.data.challengedId) &&
+                              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'winnerId']) &&
+                              request.resource.data.status == "completed"
+                            )
+                          )
+                        ) ||
+                        // Action 2: Progress Updates
+                        (
+                          // Challenger updates progressPlayer1
+                          (
+                            request.auth.uid == resource.data.challengerId &&
+                            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progressPlayer1'])
+                          ) ||
+                          // Challenged updates progressPlayer2
+                          (
+                            request.auth.uid == resource.data.challengedId &&
+                            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progressPlayer2'])
+                          )
+                        ) ||
+                        // Action 3: Claiming Rewards
+                        (
+                          (request.auth.uid == resource.data.challengerId || request.auth.uid == resource.data.challengedId) &&
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rewardsClaimed'])
+                        )
+                      );
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidSupportTicket(request.resource.data);
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid && isValidSupportTicket(request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    match /app_updates/{updateId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidAppUpdate(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /admin_alerts/{alertId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /global_notifications/{notificationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /worlds/{worldId} {

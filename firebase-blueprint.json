@@ -45,6 +45,15 @@
         "currentActivity": {
           "type": "string"
         },
+        "completedWizard": {
+          "type": "boolean"
+        },
+        "dailyFocusTarget": {
+          "type": "number"
+        },
+        "missionRole": {
+          "type": "string"
+        },
         "coins": {
           "type": "number"
         },
@@ -445,6 +454,15 @@
         "currentActivity": {
           "type": "string"
         },
+        "completedWizard": {
+          "type": "boolean"
+        },
+        "dailyFocusTarget": {
+          "type": "number"
+        },
+        "missionRole": {
+          "type": "string"
+        },
         "coins": {
           "type": "number"
         },
@@ -509,9 +527,79 @@
         "views",
         "likes"
       ]
+    },
+    "AppUpdate": {
+      "title": "AppUpdate",
+      "description": "System release notes and feature announcements",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "number"
+        },
+        "adminId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "description",
+        "timestamp",
+        "adminId"
+      ]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Technical support ticket thread",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "closed"]
+        },
+        "lastMessage": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "senderId": { "type": "string" },
+              "senderName": { "type": "string" },
+              "text": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["senderId", "senderName", "text", "createdAt"]
+          }
+        }
+      },
+      "required": ["userId", "userName", "status", "lastMessage", "updatedAt", "messages"]
     }
   },
   "firestore": {
+    "/app_updates/{updateId}": {
+      "schema": "AppUpdate",
+      "description": "Global application updates published by administrators"
+    },
     "/users/{uid}": {
       "schema": "User",
       "description": "User profiles (Private, contains PII)"
@@ -547,6 +635,10 @@
     "/suggestions/{suggestionId}": {
       "schema": "Suggestion",
       "description": "User suggestions"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Technical support tickets and integrated real-time chats"
     },
     "/global_chat/{messageId}": {
       "schema": "Message",
