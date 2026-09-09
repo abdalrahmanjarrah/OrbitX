@@ -505,22 +505,10 @@ export function useSessionEngine(
         return;
       }
 
-      if (options.isPenalty && options.penaltyReason && (options.penaltyAmount || 0) < 0) {
-        // Exit penalty: leaving a station while its round is running costs -10 XP.
-        try {
-          await requestXpGrant(
-            userRef.current.uid,
-            userRef.current.fleetId,
-            null,
-            false,
-            options.penaltyAmount || -10,
-            "self_exit_penalty",
-            true,
-          );
-          showToast("غادرت خلال جولة نشطة — تم خصم 10 XP", "warning");
-        } catch (err) {
-          console.error("[Exit Engine] Failed to apply exit XP penalty:", err);
-        }
+      if (options.isPenalty && options.penaltyReason) {
+        // Exit XP penalty removed by product decision — leaving a station is
+        // always free. Ghost cleanup + leader takeover already keep rounds safe.
+        console.log("[Exit Engine] Exit penalty is disabled by design:", options.penaltyReason);
       }
 
       if (!options.skipFirebaseUpdate) {
