@@ -725,13 +725,21 @@ await updateDoc(roomRef, {
     if (isSpectator || !isJoined || !auth.currentUser) return;
     const sweep = () => {
       const now = Date.now() + clockOffsetRef.current;
-      const curRoom = roomSnapshotRef.current;
-      if (!curRoom) return;
       if (now - lastSweepAtRef.current < SWEEP_INTERVAL_MS) return;
       lastSweepAtRef.current = now;
 
-      getDocs(collection(db, "rooms", stationId, "participants"))
-        .then((snap) => {
+      // Authoritative fresh room read — kick/handover decisions must never rely
+      // on a stale local snapshot. (That is what made a host who JUST started
+      // the round get falsely read as "idle" and kicked out of his own station.)
+      getDoc(roomRef)
+        .then((roomSnap) => {
+          if (!roomSnap.exists()) return undefined;
+          const curRoom = roomSnap.data() as Room;
+          const participants = curRoom.participants || [];
+          if (participants.length === 0) return undefined;
+
+          return getDocs(collection(db, "rooms", stationId, "participants")).then(
+            (snap) => {
           const presence = new Map<string, number>();
           const joinedAt = new Map<string, number>();
           const nameById = new Map<string, string>();
@@ -744,12 +752,17 @@ await updateDoc(roomRef, {
             if (data.userName) nameById.set(d.id, String(data.userName));
           });
 
-          const participants = curRoom.participants || [];
-          if (participants.length === 0) return;
-
-          const ghostUids = participants.filter(
-            (p) => p !== user.uid && now - (presence.get(p) || 0) > PRESENCE_STALE_MS
-          );
+          // Ghost = no fresh heartbeat AND not a brand-new member. Grace rule:
+          // someone who joined within the last STALE window is never removed,
+          // even if their first heartbeat hasn't landed yet.
+          const ghostUids = participants.filter((p) => {
+            if (p === user.uid) return false;
+            const presenceT = presence.get(p);
+            const joinedT = joinedAt.get(p);
+            if (joinedT !== undefined && now - joinedT <= PRESENCE_STALE_MS) return false;
+            if (presenceT === undefined) return joinedT === undefined;
+            return now - presenceT > PRESENCE_STALE_MS;
+          });
 
           const currentHost = curRoom.hostId || curRoom.creatorId;
           const updates: any = {};
@@ -871,6 +884,7 @@ await updateDoc(roomRef, {
               });
             }
             return undefined;
+          });
           });
         })
         .catch(() => {});
