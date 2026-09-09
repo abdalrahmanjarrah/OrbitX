@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الرّفعة — وكالة تسويق رقمي لعيادات الأسنان</title>
+<meta name="description" content="وكالة الرّفعة تضاعف إيرادات عيادتك، وتجلب لك المرضى الذين تريدهم تحديدًا، وتدير تواصلهم ومواعيدهم بدلًا عنك — في بلاد الشام والخليج.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0B0E;
+  --surface:#131318;
+  --surface-2:#191920;
+  --line:rgba(255,255,255,.08);
+  --gold-line:rgba(212,175,55,.28);
+  --gold:#D4AF37;
+  --gold-soft:#E8CD7A;
+  --gold-deep:#9C7E1E;
+  --text:#F6F3EA;
+  --muted:#A7A193;
+  --radius:18px;
+  --maxw:1100px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+a{text-decoration:none;color:inherit}
+.container{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+
+/* ---------- Header ---------- */
+header{
+  position:sticky;top:0;z-index:50;
+  background:rgba(11,11,14,.85);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.header-in{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:16px;height:72px;
+}
+.logo{font-weight:700;font-size:23px;letter-spacing:.5px;white-space:nowrap}
+.logo span{color:var(--gold)}
+.nav-links{display:none;gap:26px}
+.nav-links a{color:var(--muted);font-size:15px;font-weight:500;transition:color .25s}
+.nav-links a:hover{color:var(--gold-soft)}
+.nav-cta{
+  display:inline-flex;align-items:center;
+  background:linear-gradient(135deg,var(--gold-soft),var(--gold) 45%,var(--gold-deep));
+  color:#16160F;font-weight:600;font-size:15px;
+  padding:10px 22px;border-radius:999px;white-space:nowrap;
+  transition:transform .25s ease, box-shadow .25s ease;
+}
+.nav-cta:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(212,175,55,.32)}
+@media(min-width:900px){.nav-links{display:flex}}
+
+/* ---------- Hero ---------- */
+.hero{position:relative;padding:80px 0 96px;overflow:hidden;text-align:center}
+.hero::before{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(720px 380px at 50% -12%, rgba(212,175,55,.14), transparent 62%);
+  pointer-events:none;
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;
+  color:var(--gold-soft);font-weight:500;font-size:15px;
+  border:1px solid var(--gold-line);border-radius:999px;
+  padding:8px 20px;margin-bottom:28px;
+  background:rgba(212,175,55,.05);
+}
+.eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold)}
+h1{
+  font-size:clamp(32px,6.4vw,56px);
+  font-weight:700;line-height:1.4;letter-spacing:-.3px;
+  margin:0 auto 22px;max-width:820px;
+}
+.gold-grad{
+  background:linear-gradient(120deg,var(--gold-soft),var(--gold) 50%,var(--gold-deep));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero-sub{
+  font-size:clamp(16px,2.4vw,19px);color:var(--muted);
+  max-width:660px;margin:0 auto 40px;
+}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--gold-soft),var(--gold) 45%,var(--gold-deep));
+  color:#16160F;font-weight:700;font-size:17px;
+  padding:16px 34px;border-radius:999px;
+  box-shadow:0 10px 30px rgba(212,175,55,.25);
+  transition:transform .25s ease, box-shadow .25s ease;
+}
+.btn:hover{transform:translateY(-3px);box-shadow:0 16px 42px rgba(212,175,55,.35)}
+.btn-ghost{
+  background:transparent;color:var(--text);
+  border:1px solid var(--line);box-shadow:none;font-weight:600;
+}
+.btn-ghost:hover{border-color:var(--gold);box-shadow:none}
+.hero-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.hero-tag{
+  margin-top:36px;color:var(--muted);font-size:15px;
+  display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+}
+.hero-tag b{color:var(--gold-soft);font-weight:600}
+
+/* ---------- How it starts (3 steps) ---------- */
+.strip{
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  background:var(--surface);
+  padding:34px 0;
+}
+.strip-label{text-align:center;color:var(--muted);font-size:15px;margin-bottom:26px}
+.strip-label b{color:var(--text);font-weight:600}
+.strip-grid{display:grid;grid-template-columns:1fr;gap:26px}
+.strip-item{display:flex;gap:16px;align-items:flex-start;text-align:right}
+.strip-num{
+  flex-shrink:0;width:44px;height:44px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:17px;color:var(--gold);
+  border:1px solid var(--gold-line);background:rgba(212,175,55,.06);
+}
+.strip-item h4{font-size:17px;font-weight:600;margin-bottom:3px}
+.strip-item p{color:var(--muted);font-size:15px;line-height:1.75}
+@media(min-width:700px){.strip-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* ---------- Sections ---------- */
+section{padding:84px 0}
+.section-head{text-align:center;max-width:660px;margin:0 auto 52px}
+.kicker{color:var(--gold-soft);font-weight:600;font-size:15px;margin-bottom:12px;display:block}
+h2{
+  font-size:clamp(26px,4.2vw,38px);font-weight:700;line-height:1.45;margin-bottom:16px;
+}
+.section-head p{color:var(--muted);font-size:17px}
+
+/* ---------- Problem ---------- */
+.problem{border-top:1px solid var(--line)}
+.problem-grid{display:grid;grid-template-columns:1fr;gap:16px}
+.problem-card{
+  background:var(--surface);border:1px solid var(--line);
+  border-right:3px solid var(--gold);
+  border-radius:var(--radius);padding:26px;
+}
+.problem-card p{color:var(--muted);font-size:16.5px;line-height:1.85}
+.problem-card b{color:var(--text)}
+.problem-note{
+  margin-top:30px;text-align:center;color:var(--muted);font-size:17px;
+}
+.problem-note span{font-weight:700}
+@media(min-width:700px){.problem-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* ---------- Services ---------- */
+.services{border-top:1px solid var(--line)}
+.services-grid{display:grid;grid-template-columns:1fr;gap:18px}
+.service-card{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--radius);padding:30px 28px;
+  transition:transform .3s ease, border-color .3s ease;
+}
+.service-card:hover{transform:translateY(-5px);border-color:var(--gold-line)}
+.service-icon{
+  width:50px;height:50px;border-radius:13px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(212,175,55,.09);border:1px solid var(--gold-line);
+  margin-bottom:18px;color:var(--gold);
+}
+.service-card h3{font-size:18.5px;font-weight:700;margin-bottom:9px}
+.service-card p{color:var(--muted);font-size:15.5px;line-height:1.8}
+@media(min-width:700px){.services-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:980px){.services-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* ---------- Why me ---------- */
+.why{border-top:1px solid var(--line)}
+.why-grid{display:grid;grid-template-columns:1fr;gap:18px}
+.why-card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:30px 28px;
+  transition:transform .3s ease,border-color .3s ease;
+}
+.why-card:hover{transform:translateY(-5px);border-color:var(--gold-line)}
+.why-card .num{color:var(--gold);font-weight:700;font-size:15px;letter-spacing:1px;margin-bottom:10px}
+.why-card h3{font-size:18.5px;font-weight:700;margin-bottom:9px}
+.why-card p{color:var(--muted);font-size:15.5px;line-height:1.8}
+@media(min-width:700px){.why-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* ---------- How it works ---------- */
+.how{border-top:1px solid var(--line)}
+.how-list{max-width:760px;margin:0 auto}
+.how-step{display:flex;gap:22px;padding:24px 0;border-bottom:1px dashed rgba(255,255,255,.1)}
+.how-step:last-child{border-bottom:none}
+.how-step .strip-num{margin-top:3px}
+.how-step h3{font-size:19px;font-weight:700;margin-bottom:5px}
+.how-step p{color:var(--muted);font-size:15.5px}
+
+/* ---------- FAQ ---------- */
+.faq{border-top:1px solid var(--line)}
+.faq-list{max-width:760px;margin:0 auto;display:grid;gap:14px}
+details{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:0 24px;overflow:hidden;
+  transition:border-color .3s ease;
+}
+details[open]{border-color:var(--gold-line)}
+summary{
+  list-style:none;cursor:pointer;font-weight:600;font-size:17px;
+  padding:21px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;
+}
+summary::-webkit-details-marker{display:none}
+summary::after{
+  content:"+";flex-shrink:0;width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--gold-line);color:var(--gold);font-size:20px;font-weight:500;
+  transition:transform .25s ease;
+}
+details[open] summary::after{transform:rotate(45deg)}
+.faq-a{padding-bottom:22px;color:var(--muted);font-size:15.5px;line-height:1.85}
+
+/* ---------- Final CTA ---------- */
+.final-cta{padding:16px 0 96px}
+.cta-panel{
+  background:
+    radial-gradient(560px 300px at 50% -15%, rgba(212,175,55,.18), transparent 60%),
+    var(--surface);
+  border:1px solid var(--gold-line);border-radius:26px;
+  text-align:center;padding:66px 24px;position:relative;overflow:hidden;
+}
+.cta-panel h2{margin-bottom:14px}
+.cta-panel p{color:var(--muted);font-size:18px;max-width:540px;margin:0 auto 38px}
+
+/* ---------- Footer ---------- */
+footer{border-top:1px solid var(--line);padding:48px 0 56px;background:var(--surface)}
+.foot-in{display:flex;flex-direction:column;gap:26px;text-align:center;align-items:center}
+.foot-logo{font-weight:700;font-size:21px}
+.foot-logo span{color:var(--gold)}
+.foot-links{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+.foot-links a{color:var(--muted);font-size:15px;transition:color .25s}
+.foot-links a:hover{color:var(--gold-soft)}
+.foot-meta{color:#6E6859;font-size:13.5px}
+.foot-social{display:flex;gap:12px}
+.foot-social a{
+  width:42px;height:42px;border-radius:50%;
+  border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:13px;font-weight:600;
+  transition:border-color .25s,color .25s,transform .25s;
+}
+.foot-social a:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-3px)}
+@media(min-width:900px){
+  .foot-in{flex-direction:row;justify-content:space-between;text-align:right}
+}
+
+/* ---------- Reveal on scroll ---------- */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.reveal.visible{opacity:1;transform:none}
+
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  *{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header>
+  <div class="container header-in">
+    <a href="#" class="logo">الرّ<span>فعة</span></a>
+    <nav class="nav-links">
+      <a href="#services">الخدمات</a>
+      <a href="#why">لماذا نحن</a>
+      <a href="#how">كيف نعمل</a>
+      <a href="#faq">الأسئلة</a>
+    </nav>
+    <a class="nav-cta" href="https://calendly.com/your-booking-link" target="_blank" rel="noopener">احجز مكالمة مجانية</a>
+  </div>
+</header>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+  <div class="container">
+    <span class="eyebrow">وكالة تسويق رقمي لعيادات الأسنان — بلاد الشام والخليج</span>
+    <h1>عيادتك ترتفع:<br><span class="gold-grad">مرضى أكثر، دخل مضاعف، وتواصل في وقته</span></h1>
+    <p class="hero-sub">
+      لا نكتفي بالإعلانات. نقدم باقة متكاملة تجلب لك المرضى الذين تريدهم تحديدًا،
+      وتدير مواعيدهم وتواصلهم — بدلًا عنك، وبسرعة.
+    </p>
+    <div class="hero-actions">
+      <a class="btn" href="https://calendly.com/your-booking-link" target="_blank" rel="noopener">احجز مكالمة مجانية</a>
+      <a class="btn btn-ghost" href="#how">كيف نعمل؟</a>
+    </div>
+    <div class="hero-tag">
+      من أول رسالة مريض عبر واتساب، حتى اكتمال المواعيد في التقويم: <b>نحن مع كل خطوة</b>
+    </div>
+  </div>
+</section>
+
+<!-- ===== كيف نبدأ (بدل أرقام زائفة) ===== -->
+<div class="strip">
+  <div class="container">
+    <p class="strip-label"><b>من أين نبدأ؟</b> طريقنا من أول مكالمة إلى مرضى محجوزين، في ثلاث خطوات:</p>
+    <div class="strip-grid">
+      <div class="strip-item reveal">
+        <div class="strip-num">1</div>
+        <div>
+          <h4>مكالمة مجانية نفهم فيها عيادتك</h4>
+          <p>نتعرف على خدماتك وأهدافك، والمرضى الذين تريدهم تحديدًا.</p>
+        </div>
+      </div>
+      <div class="strip-item reveal">
+        <div class="strip-num">2</div>
+        <div>
+          <h4>نبني لك الباقة المناسبة</h4>
+          <p>إعلانات + عميل ذكي + نظام تواصل كامل، مضبوط على عيادتك.</p>
+        </div>
+      </div>
+      <div class="strip-item reveal">
+        <div class="strip-num">3</div>
+        <div>
+          <h4>يصل المرضى وأنت مطمئن</h4>
+          <p>مواعيد محجوزة، ردود فورية، وإيرادات ترتفع شهرًا بعد شهر.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== المشكلة ===== -->
+<section class="problem" id="problem">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">نعرف ألمك لأننا نعمل في هذا المجال</span>
+      <h2>هل تشعر أن عدد المرضى <span class="gold-grad">توقف عند حد؟</span></h2>
+      <p>المشكلة ليست في مهارة طبيبك، بل في غياب فريق يسوّق لعيادتك ويعمل حولها.</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card reveal">
+        <p>يمضي الشهر، والعيادة مزدحمة، لكن <b>الإيرادات لا ترتفع</b>.</p>
+      </div>
+      <div class="problem-card reveal">
+        <p>يسأل المريض عبر واتساب، ولا أحد يجيب — <b>فيذهب إلى العيادة المجاورة</b>.</p>
+      </div>
+      <div class="problem-card reveal">
+        <p>تنفق على الإعلانات، لكن من يصل إليك <b>ليس المرضى الذين تريدهم</b>.</p>
+      </div>
+    </div>
+    <p class="problem-note">المشكلة ليست في المرضى، بل <span class="gold-grad">في من يتواصل معهم.</span></p>
+  </div>
+</section>
+
+<!-- ===== الخدمات ===== -->
+<section class="services" id="services">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">ماذا نفعل عنك؟</span>
+      <h2>باقة متكاملة تعمل بتناسق</h2>
+      <p>ليست خدمات متفرقة — بل نظام واحد يرافق المريض من أول إعلان إلى آخر موعد.</p>
+    </div>
+    <div class="services-grid">
+      <div class="service-card reveal">
+        <div class="service-icon">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/></svg>
+        </div>
+        <h3>إعلانات احترافية تجلب المرضى</h3>
+        <p>حملات بهدف واحد: جذب المرضى الذين تريدهم تحديدًا — لا نقرات بلا فائدة.</p>
+      </div>
+      <div class="service-card reveal">
+        <div class="service-icon">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3>عميل ذكي خاص بعيادتك</h3>
+        <p>نظام صُمّم لعيادتك وحدها: يفهم خدماتك، ويجيب عن استفسارات مرضاك حتى الحجز.</p>
+      </div>
+      <div class="service-card reveal">
+        <div class="service-icon">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <h3>متابعة العملاء المحتملين</h3>
+        <p>كل من سأل أو تفاعل، نتابع معه قبل أن يتجه إلى عيادة أخرى.</p>
+      </div>
+      <div class="service-card reveal">
+        <div class="service-icon">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+        <h3>حجز المواعيد</h3>
+        <p>يمتلئ تقويم عيادتك، ويصل المرضى في الموعد المحدد دون تأخير.</p>
+      </div>
+      <div class="service-card reveal">
+        <div class="service-icon">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </div>
+        <h3>إدارة واتساب</h3>
+        <p>ردود فورية على كل رسالة، فلا يبقى مريض ينتظر الرد.</p>
+      </div>
+      <div class="service-card reveal">
+        <div class="service-icon">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h3>جذب المرضى الذين تريدهم</h3>
+        <p>مرضى محددون حسب اختيارك — لن يصل إليك من صادف إعلانك دون قصد.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== لماذا نحن ===== -->
+<section class="why" id="why">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">لماذا نحن؟</span>
+      <h2>لست وكالة أخرى — <span class="gold-grad">أسلوب عمل مختلف</span></h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-card reveal">
+        <div class="num">01</div>
+        <h3>سرعة تصنع الفارق</h3>
+        <p>مريضك الذي يسأل الآن لن يذهب إلى عيادة أخرى — نرد عليه قبل أن يغيّر رأيه.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="num">02</div>
+        <h3>وعدنا مضاعفة الدخل</h3>
+        <p>لسنا مجرد "تحسين للتسويق" — كل عملنا يرتبط بخط واحد: أن تتضاعف إيرادات عيادتك.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="num">03</div>
+        <h3>عميل ذكي صُمّم لعيادتك</h3>
+        <p>ليس قالبًا جاهزًا لجميع العيادات، بل نظام يتعلم خدماتك وأسلوبك ويعكسهما لمرضاك.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="num">04</div>
+        <h3>شفافية كاملة</h3>
+        <p>تعرف في كل لحظة ماذا نفعل، وأين تذهب مصاريفك، وماذا حدث مع كل مريض.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== كيف نعمل ===== -->
+<section class="how" id="how">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">كيف نعمل</span>
+      <h2>من أول مكالمة إلى مواعيد محجوزة</h2>
+    </div>
+    <div class="how-list">
+      <div class="how-step reveal">
+        <div class="strip-num">1</div>
+        <div>
+          <h3>احجز مكالمة مجانية</h3>
+          <p>مكالمة قصيرة عبر Google Meet نفهم فيها عيادتك وأهدافك والمرضى الذين تريدهم.</p>
+        </div>
+      </div>
+      <div class="how-step reveal">
+        <div class="strip-num">2</div>
+        <div>
+          <h3>نبني الخطة</h3>
+          <p>نُعد لك خطة مفصلة: الإعلانات، العميل الذكي، ونظام التواصل — بتكلفتها ونتائجها المتوقعة.</p>
+        </div>
+      </div>
+      <div class="how-step reveal">
+        <div class="strip-num">3</div>
+        <div>
+          <h3>نشغّل الباقة</h3>
+          <p>تنطلق الإعلانات، يبدأ العميل الذكي بالرد، وتمتلئ المواعيد — خطوة بخطوة معك.</p>
+        </div>
+      </div>
+      <div class="how-step reveal">
+        <div class="strip-num">4</div>
+        <div>
+          <h3>نتحسّن كل شهر</h3>
+          <p>تقارير واضحة، ونتعلم من كل حملة — ليكون هذا الشهر أفضل من سابقه.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== الأسئلة ===== -->
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">أسئلة نسمعها كل يوم</span>
+      <h2>سألت نفسك سؤالًا من هذه؟</h2>
+    </div>
+    <div class="faq-list">
+      <details class="reveal">
+        <summary>ليست لدي ميزانية كبيرة — كيف نبدأ؟</summary>
+        <p class="faq-a">لا مشكلة. نبدأ بخطة صغيرة ومضبوطة تناسب ميزانيتك، ونوسعها عند أول نتيجة. الأهم الأسلوب الصحيح من البداية، لا حجم الإنفاق.</p>
+      </details>
+      <details class="reveal">
+        <summary>متى أرى النتائج؟</summary>
+        <p class="faq-a">تعمل الإعلانات منذ أيامها الأولى، وقد ترى أولى الاستفسارات خلال أسبوعين. أما مضاعفة الدخل الكاملة فتحتاج شهرين إلى ثلاثة من العمل المستمر. ومن وعدك بنتائج بين ليلة وضحا، فمعه مشكلة.</p>
+      </details>
+      <details class="reveal">
+        <summary>هل تعملون مع عيادات خارج سوريا؟</summary>
+        <p class="faq-a">نعم. نعمل مع عيادات بلاد الشام والخليج، ونضبط كل حملة على سوقك — إعلانات وتواصلًا وأسلوب بيع يناسب جمهورك.</p>
+      </details>
+      <details class="reveal">
+        <summary>ماذا أحتاج من جهتي؟</summary>
+        <p class="faq-a">الأساسيات على الأقل: أسعارك وخدماتك والمواعيد المتاحة. أما الباقي — الإعلانات، العميل الذكي، ونظام الرد — فهو من عندنا بالكامل.</p>
+      </details>
+      <details class="reveal">
+        <summary>ماذا لو لم تأتِ النتائج؟</summary>
+        <p class="faq-a">نراجع تقاريرنا معًا، نحلل موضع الخلل، ونعدّل الخطة. هدفنا واحد: أن تنتج عيادتك. نحاسب أنفسنا على النتيجة، لا على مجرد التنفيذ.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===== الدعوة الأخيرة ===== -->
+<section class="final-cta">
+  <div class="container">
+    <div class="cta-panel reveal">
+      <span class="kicker">مستعد لترقية عيادتك؟</span>
+      <h2>عيادتك ترتفع من أول <span class="gold-grad">مكالمة</span></h2>
+      <p>مكالمة مجانية عبر Google Meet. بدون التزام، وبدون شكليات. فقط نتحدث ونرى إن كان بإمكاننا العمل معًا.</p>
+      <a class="btn" href="https://calendly.com/your-booking-link" target="_blank" rel="noopener">احجز مكالمة مجانية</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== التذييل ===== -->
+<footer>
+  <div class="container foot-in">
+    <div>
+      <a href="#" class="foot-logo">الرّ<span>فعة</span></a>
+      <p class="foot-meta">وكالة تسويق رقمي لعيادات الأسنان — بلاد الشام والخليج</p>
+    </div>
+    <nav class="foot-links">
+      <a href="#services">الخدمات</a>
+      <a href="#why">لماذا نحن</a>
+      <a href="#how">كيف نعمل</a>
+      <a href="#faq">الأسئلة</a>
+      <a href="https://calendly.com/your-booking-link" target="_blank" rel="noopener">احجز مكالمة</a>
+    </nav>
+    <div class="foot-social">
+      <a href="#" aria-label="واتساب">واتساب</a>
+      <a href="#" aria-label="إنستغرام">إنستغرام</a>
+      <a href="#" aria-label="فيسبوك">فيسبوك</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      io.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

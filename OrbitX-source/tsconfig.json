@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "firebase/app": [
+        "./src/supabaseAdapter.ts"
+      ],
+      "firebase/auth": [
+        "./src/supabaseAdapter.ts"
+      ],
+      "firebase/firestore": [
+        "./src/supabaseAdapter.ts"
+      ],
+      "react-firebase-hooks/auth": [
+        "./src/firebaseHooks.ts"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "server.ts"
+  ]
+}

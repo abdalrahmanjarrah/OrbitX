@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ Site Blocker</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #0a0a1a;
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .app { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: #111128;
+            border-left: 1px solid #222;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            right: 0;
+            top: 0;
+            z-index: 100;
+        }
+        .sidebar-logo {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #222;
+            text-align: center;
+        }
+        .sidebar-logo h2 { font-size: 1.5em; }
+        .sidebar-logo span { color: #667eea; }
+        .sidebar nav { flex: 1; padding: 10px 0; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: 0.2s;
+            border-right: 3px solid transparent;
+            color: #888;
+        }
+        .nav-item:hover { background: rgba(102, 126, 234, 0.1); color: #fff; }
+        .nav-item.active {
+            background: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+            border-right-color: #667eea;
+        }
+        .nav-item .icon { font-size: 1.3em; width: 25px; text-align: center; }
+        .sidebar-footer { padding: 15px 20px; border-top: 1px solid #222; font-size: 0.8em; color: #555; text-align: center; }
+
+        /* Main Content */
+        .main { flex: 1; margin-right: 250px; padding: 30px; }
+
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #1a1a3e, #111128);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid #222;
+            transition: 0.3s;
+        }
+        .stat-card:hover { transform: translateY(-3px); border-color: #667eea; }
+        .stat-card .label { color: #888; font-size: 0.9em; margin-bottom: 5px; }
+        .stat-card .value { font-size: 2em; font-weight: bold; }
+        .stat-card .value.blue { color: #667eea; }
+        .stat-card .value.green { color: #4ade80; }
+        .stat-card .value.red { color: #ef4444; }
+        .stat-card .value.yellow { color: #facc15; }
+
+        /* Section */
+        .section {
+            background: #111128;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #222;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .section-header h2 { font-size: 1.3em; }
+
+        /* Toggle */
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            cursor: pointer;
+        }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #333;
+            border-radius: 26px;
+            transition: 0.3s;
+        }
+        .slider:before {
+            content: '';
+            position: absolute;
+            width: 20px; height: 20px;
+            left: 3px; bottom: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle input:checked + .slider {
+            background: #667eea;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+        .toggle input:checked + .slider:before { transform: translateX(24px); }
+
+        /* Input */
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .input-group input, .input-group select {
+            flex: 1;
+            padding: 12px 18px;
+            border: 1px solid #333;
+            border-radius: 10px;
+            background: #0a0a1a;
+            color: #fff;
+            font-size: 1em;
+            outline: none;
+            transition: 0.3s;
+        }
+        .input-group input:focus, .input-group select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
+        }
+        .input-group input::placeholder { color: #555; }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: 0.3s;
+            font-weight: 600;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+        .btn-primary:hover { box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+        .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+        .btn-danger:hover { box-shadow: 0 5px 20px rgba(239, 68, 68, 0.4); }
+        .btn-success { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
+        .btn-success:hover { box-shadow: 0 5px 20px rgba(34, 197, 94, 0.4); }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #444;
+            color: #fff;
+        }
+        .btn-outline:hover { border-color: #667eea; background: rgba(102, 126, 234, 0.1); }
+        .btn-sm { padding: 6px 14px; font-size: 0.85em; border-radius: 8px; }
+
+        /* Quick Buttons */
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .quick-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            border: 1px solid #333;
+            border-radius: 10px;
+            background: #0a0a1a;
+            color: #fff;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9em;
+        }
+        .quick-btn:hover { border-color: #667eea; background: rgba(102, 126, 234, 0.1); }
+        .quick-btn.blocked {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+        .quick-btn .icon { font-size: 1.3em; }
+
+        /* Sites List */
+        .sites-list { max-height: 400px; overflow-y: auto; }
+        .site-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .site-item:hover { background: rgba(255, 255, 255, 0.06); border-color: #333; }
+        .site-info { display: flex; align-items: center; gap: 12px; }
+        .site-icon { font-size: 1.4em; }
+        .site-url { font-size: 1.05em; }
+        .site-type {
+            font-size: 0.75em;
+            padding: 3px 8px;
+            border-radius: 5px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .site-type.permanent {
+            background: rgba(250, 204, 21, 0.2);
+            color: #facc15;
+        }
+
+        /* Empty State */
+        .empty { text-align: center; padding: 40px; color: #555; }
+        .empty .icon { font-size: 3em; margin-bottom: 10px; }
+
+        /* Schedule */
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .time-input label { display: block; color: #888; margin-bottom: 5px; font-size: 0.9em; }
+        .time-input input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #0a0a1a;
+            color: #fff;
+            font-size: 1em;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: 0.3s;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { background: #22c55e; color: #fff; }
+        .toast.error { background: #ef4444; color: #fff; }
+        .toast.info { background: #667eea; color: #fff; }
+
+        /* Password Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 500;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: #111128;
+            border-radius: 15px;
+            padding: 30px;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid #333;
+        }
+        .modal h3 { margin-bottom: 20px; }
+        .modal input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #0a0a1a;
+            color: #fff;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 6px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; }
+            .sidebar-logo h2, .sidebar-logo span, .nav-item span:not(.icon), .sidebar-footer { display: none; }
+            .nav-item { justify-content: center; padding: 14px; }
+            .main { margin-right: 60px; padding: 15px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .schedule-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-logo">
+                <h2>🛡️ <span>Blocker</span></h2>
+            </div>
+            <nav>
+                <div class="nav-item active" onclick="showPage('dashboard')">
+                    <span class="icon">📊</span><span>الرئيسية</span>
+                </div>
+                <div class="nav-item" onclick="showPage('sites')">
+                    <span class="icon">🚫</span><span>المواقع المحظورة</span>
+                </div>
+                <div class="nav-item" onclick="showPage('schedule')">
+                    <span class="icon">⏰</span><span>الجدولة</span>
+                </div>
+                <div class="nav-item" onclick="showPage('settings')">
+                    <span class="icon">⚙️</span><span>الإعدادات</span>
+                </div>
+            </nav>
+            <div class="sidebar-footer">v1.0 — Site Blocker</div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main">
+
+            <!-- Dashboard Page -->
+            <div class="page active" id="page-dashboard">
+                <h1 style="margin-bottom: 25px;">📊 لوحة التحكم</h1>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">الحالة</div>
+                        <div class="value green" id="statusValue">مفعّل</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">المواقع المحظورة</div>
+                        <div class="value blue" id="blockedCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">الحظر الدائم</div>
+                        <div class="value yellow" id="permanentCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">الحظر المؤقت</div>
+                        <div class="value red" id="tempCount">0</div>
+                    </div>
+                </div>
+
+                <!-- Quick Toggle -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2>⚡ التحكم السريع</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="mainToggle" checked onchange="toggleBlocker()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <p style="color: #888;">فعّل أو تعطّل الحظر بضغطة وحدة</p>
+                </div>
+
+                <!-- Quick Add -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2>⚡ إضافة سريعة</h2>
+                    </div>
+                    <div class="quick-grid" id="quickGrid"></div>
+                </div>
+
+                <!-- Add Custom Site -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2>➕ أضف موقع مخصص</h2>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="customSite" placeholder="مثال: youtube.com">
+                        <select id="blockType">
+                            <option value="permanent">🔒 حظر دائم</option>
+                            <option value="temporary">⏰ حظر مؤقت</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="addCustomSite()">أضف</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sites Page -->
+            <div class="page" id="page-sites">
+                <div class="section-header" style="margin-bottom: 20px;">
+                    <h1>🚫 المواقع المحظورة</h1>
+                    <button class="btn btn-danger btn-sm" onclick="unblockAll()">حذف الكل</button>
+                </div>
+                <div class="sites-list" id="sitesList">
+                    <div class="empty">
+                        <div class="icon">🌐</div>
+                        <p>ما في مواقع محظورة</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Page -->
+            <div class="page" id="page-schedule">
+                <h1 style="margin-bottom: 25px;">⏰ جدولة الحظر</h1>
+                <div class="section">
+                    <div class="section-header">
+                        <h2>تفعيل الجدولة</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="scheduleToggle" onchange="toggleSchedule()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="schedule-grid" style="margin-top: 15px;">
+                        <div class="time-input">
+                            <label>وقت البداية</label>
+                            <input type="time" id="scheduleStart" value="09:00" onchange="saveSchedule()">
+                        </div>
+                        <div class="time-input">
+                            <label>وقت النهاية</label>
+                            <input type="time" id="scheduleEnd" value="17:00" onchange="saveSchedule()">
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-top: 15px; font-size: 0.9em;">
+                        الحظر يتفعّل تلقائياً بالوقت المحدد ويتعطّل بعده
+                    </p>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div class="page" id="page-settings">
+                <h1 style="margin-bottom: 25px;">⚙️ الإعدادات</h1>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h2>🔐 حماية بكلمة سر</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="passwordToggle" onchange="togglePassword()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <p style="color: #888; margin-top: 10px;">以防 غيرك يقدر يغيّر الإعدادات</p>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h2>🔄 الحظر الدائم</h2>
+                    </div>
+                    <p style="color: #888; margin-bottom: 15px;">ثبّت خدمة تشغل الحظر تلقائياً مع تشغيل الجهاز</p>
+                    <button class="btn btn-success" onclick="installService()">ثبّت الحظر الدائم</button>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h2>📥 تصدير/استيراد</h2>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-outline" onclick="exportConfig()">تصدير القائمة</button>
+                        <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">استيراد القائمة</button>
+                        <input type="file" id="importFile" style="display:none" accept=".json" onchange="importConfig(event)">
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h2>ℹ️ كيف يشتغل؟</h2>
+                    </div>
+                    <div style="color: #888; line-height: 1.8;">
+                        <p>1. أضف المواقع اللي تبي تحظرها</p>
+                        <p>2. النظام يعدّل ملف <code style="background:#222;padding:2px 6px;border-radius:4px;">/etc/hosts</code></p>
+                        <p>3. المتصفح ما يقدر يوصل للمواقع المحظورة</p>
+                        <p>4. <strong>ثبّت الحظر الدائم</strong> عشان يبقى بعد إعادة التشغيل</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Password Modal -->
+    <div class="modal-overlay" id="passwordModal">
+        <div class="modal">
+            <h3>🔐 أدخل كلمة السر</h3>
+            <input type="password" id="passwordInput" placeholder="كلمة السر">
+            <div class="modal-actions">
+                <button class="btn btn-outline btn-sm" onclick="closeModal()">إلغاء</button>
+                <button class="btn btn-primary btn-sm" onclick="verifyPassword()">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+        let config = { blocked_sites: [], enabled: true, schedule: { enabled: false }, permanent_sites: [], temporary_sites: [] };
+
+        const QUICK_SITES = [
+            { name: 'YouTube', site: 'youtube.com', icon: '📺' },
+            { name: 'TikTok', site: 'tiktok.com', icon: '🎵' },
+            { name: 'Instagram', site: 'instagram.com', icon: '📸' },
+            { name: 'Twitter/X', site: 'x.com', icon: '🐦' },
+            { name: 'Facebook', site: 'facebook.com', icon: '👤' },
+            { name: 'Reddit', site: 'reddit.com', icon: '🔴' },
+            { name: 'Netflix', site: 'netflix.com', icon: '🎬' },
+            { name: 'Twitch', site: 'twitch.tv', icon: '🎥' },
+            { name: 'Snapchat', site: 'snapchat.com', icon: '👻' },
+            { name: 'Pinterest', site: 'pinterest.com', icon: '📌' },
+            { name: 'Discord', site: 'discord.com', icon: '💬' },
+            { name: 'Telegram', site: 'web.telegram.org', icon: '✈️' },
+        ];
+
+        // Load config
+        async function loadConfig() {
+            try {
+                const res = await fetch(`${API}/api/config`);
+                config = await res.json();
+                if (!config.permanent_sites) config.permanent_sites = [];
+                if (!config.temporary_sites) config.temporary_sites = [];
+                updateUI();
+            } catch (e) {
+                console.log('Using local config');
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('mainToggle').checked = config.enabled;
+            document.getElementById('blockedCount').textContent = config.blocked_sites.length;
+
+            const permanent = config.blocked_sites.filter(s => (config.permanent_sites || []).includes(s));
+            const temp = config.blocked_sites.filter(s => !(config.permanent_sites || []).includes(s));
+            document.getElementById('permanentCount').textContent = permanent.length;
+            document.getElementById('tempCount').textContent = temp.length;
+
+            document.getElementById('statusValue').textContent = config.enabled ? 'مفعّل' : 'معطّل';
+            document.getElementById('statusValue').className = 'value ' + (config.enabled ? 'green' : 'red');
+
+            renderQuickGrid();
+            renderSitesList();
+
+            if (config.schedule) {
+                document.getElementById('scheduleToggle').checked = config.schedule.enabled;
+                document.getElementById('scheduleStart').value = config.schedule.start || '09:00';
+                document.getElementById('scheduleEnd').value = config.schedule.end || '17:00';
+            }
+        }
+
+        // Render quick buttons
+        function renderQuickGrid() {
+            const grid = document.getElementById('quickGrid');
+            grid.innerHTML = QUICK_SITES.map(q => {
+                const isBlocked = config.blocked_sites.includes(q.site);
+                return `<div class="quick-btn ${isBlocked ? 'blocked' : ''}" onclick="toggleQuickSite('${q.site}')">
+                    <span class="icon">${q.icon}</span>
+                    <span>${q.name}</span>
+                    ${isBlocked ? '<span style="margin-right:auto;font-size:0.8em;">🚫</span>' : ''}
+                </div>`;
+            }).join('');
+        }
+
+        // Render sites list
+        function renderSitesList() {
+            const list = document.getElementById('sitesList');
+            if (config.blocked_sites.length === 0) {
+                list.innerHTML = '<div class="empty"><div class="icon">🌐</div><p>ما في مواقع محظورة</p></div>';
+                return;
+            }
+            list.innerHTML = config.blocked_sites.map(site => {
+                const isPermanent = (config.permanent_sites || []).includes(site);
+                const icon = QUICK_SITES.find(q => q.site === site)?.icon || '🌐';
+                return `<div class="site-item">
+                    <div class="site-info">
+                        <span class="site-icon">${icon}</span>
+                        <span class="site-url">${site}</span>
+                        <span class="site-type ${isPermanent ? 'permanent' : ''}">${isPermanent ? '🔒 دائم' : '⏰ مؤقت'}</span>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="removeSite('${site}')">حذف</button>
+                </div>`;
+            }).join('');
+        }
+
+        // Toggle quick site
+        async function toggleQuickSite(site) {
+            if (config.blocked_sites.includes(site)) {
+                await removeSite(site);
+            } else {
+                await addSite(site, 'permanent');
+            }
+        }
+
+        // Add site
+        async function addSite(site, type = 'permanent') {
+            try {
+                const res = await fetch(`${API}/api/add-site`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site, type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    config = data.config;
+                    if (!config.permanent_sites) config.permanent_sites = [];
+                    if (type === 'permanent' && !config.permanent_sites.includes(site)) {
+                        config.permanent_sites.push(site);
+                    }
+                    if (type === 'temporary' && !config.temporary_sites.includes(site)) {
+                        config.temporary_sites.push(site);
+                    }
+                    saveLocalConfig();
+                    updateUI();
+                    showToast(`🚫 تم حظر ${site}`, 'success');
+                }
+            } catch (e) {
+                showToast('❌ خطأ في الاتصال بالسيرفر', 'error');
+            }
+        }
+
+        // Add custom site
+        function addCustomSite() {
+            const input = document.getElementById('customSite');
+            const type = document.getElementById('blockType').value;
+            let site = input.value.trim().toLowerCase();
+            if (!site) { showToast('⚠️ اكتب اسم الموقع', 'error'); return; }
+            site = site.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+            if (config.blocked_sites.includes(site)) { showToast('⚠️ محظور أصلاً', 'error'); return; }
+            addSite(site, type);
+            input.value = '';
+        }
+
+        // Remove site
+        async function removeSite(site) {
+            try {
+                const res = await fetch(`${API}/api/remove-site`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site })
+                });
+                const data = await res.json();
+                config = data.config;
+                if (config.permanent_sites) config.permanent_sites = config.permanent_sites.filter(s => s !== site);
+                if (config.temporary_sites) config.temporary_sites = config.temporary_sites.filter(s => s !== site);
+                saveLocalConfig();
+                updateUI();
+                showToast(`🔓 تم إلغاء حظر ${site}`, 'info');
+            } catch (e) {
+                showToast('❌ خطأ', 'error');
+            }
+        }
+
+        // Unblock all
+        async function unblockAll() {
+            if (!confirm('متأكد تحذف كل المواقع المحظورة؟')) return;
+            try {
+                const res = await fetch(`${API}/api/unblock-all`, { method: 'POST' });
+                const data = await res.json();
+                config = data.config;
+                config.permanent_sites = [];
+                config.temporary_sites = [];
+                saveLocalConfig();
+                updateUI();
+                showToast('✅ تم حذف كل المواقع', 'success');
+            } catch (e) {
+                showToast('❌ خطأ', 'error');
+            }
+        }
+
+        // Toggle blocker
+        async function toggleBlocker() {
+            config.enabled = document.getElementById('mainToggle').checked;
+            try {
+                await fetch(`${API}/api/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: config.enabled })
+                });
+                saveLocalConfig();
+                updateUI();
+                showToast(config.enabled ? '✅ تم تفعيل الحظر' : '❌ تم تعطيل الحظر', 'info');
+            } catch (e) {
+                showToast('❌ خطأ', 'error');
+            }
+        }
+
+        // Toggle schedule
+        async function toggleSchedule() {
+            config.schedule.enabled = document.getElementById('scheduleToggle').checked;
+            saveSchedule();
+        }
+
+        // Save schedule
+        async function saveSchedule() {
+            config.schedule.start = document.getElementById('scheduleStart').value;
+            config.schedule.end = document.getElementById('scheduleEnd').value;
+            try {
+                await fetch(`${API}/api/update-schedule`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ schedule: config.schedule })
+                });
+                saveLocalConfig();
+            } catch (e) {}
+        }
+
+        // Install service
+        async function installService() {
+            try {
+                const res = await fetch(`${API}/api/install-service`);
+                const data = await res.json();
+                showToast(data.message, data.success ? 'success' : 'error');
+            } catch (e) {
+                showToast('❌ شغّل السيرفر بـ sudo', 'error');
+            }
+        }
+
+        // Toggle password
+        function togglePassword() {
+            const enabled = document.getElementById('passwordToggle').checked;
+            if (enabled) {
+                const pass = prompt('حط كلمة السر للحماية:');
+                if (pass) {
+                    fetch(`${API}/api/set-password`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: true, password: pass })
+                    });
+                    showToast('✅ تم تفعيل الحماية', 'success');
+                } else {
+                    document.getElementById('passwordToggle').checked = false;
+                }
+            } else {
+                fetch(`${API}/api/set-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: false, password: '' })
+                });
+                showToast('🔓 تم إلغاء الحماية', 'info');
+            }
+        }
+
+        // Export
+        function exportConfig() {
+            const data = JSON.stringify(config, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'site-blocker-config.json';
+            a.click();
+            showToast('📥 تم التصدير', 'success');
+        }
+
+        // Import
+        function importConfig(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    config = imported;
+                    saveLocalConfig();
+                    for (const site of config.blocked_sites) {
+                        await fetch(`${API}/api/add-site`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ site, type: 'permanent' })
+                        });
+                    }
+                    updateUI();
+                    showToast('📥 تم الاستيراد', 'success');
+                } catch (e) {
+                    showToast('❌ ملف غير صالح', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Save/load local
+        function saveLocalConfig() {
+            localStorage.setItem('siteBlockerConfig', JSON.stringify(config));
+        }
+        function loadLocalConfig() {
+            const saved = localStorage.getItem('siteBlockerConfig');
+            if (saved) config = JSON.parse(saved);
+        }
+
+        // Toast
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Navigation
+        function showPage(name) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`page-${name}`).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        // Enter key
+        document.getElementById('customSite')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addCustomSite();
+        });
+
+        // Init
+        loadLocalConfig();
+        loadConfig();
+    </script>
+</body>
+</html>

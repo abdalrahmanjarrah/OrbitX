@@ -1,0 +1,17 @@
+{
+  "name": "OrbitX",
+  "short_name": "OrbitX",
+  "description": "An operating system for focus",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b16",
+  "theme_color": "#0a0b16",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg"
+    }
+  ]
+}
