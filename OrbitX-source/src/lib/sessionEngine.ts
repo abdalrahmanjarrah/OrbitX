@@ -315,9 +315,10 @@ export function useSessionEngine(
   const roomSnapshotRef = useRef<Room | null>(null);
   const isTransitioningRef = useRef(false);
   const lastXpUpdateTimeRef = useRef<number | null>(null);
-  const sessionXpCountRef = useRef<number>(0);
+  
   const afkFailCountRef = useRef<number>(0);
   const focusSessionKeyRef = useRef<string>("");
+  const joinJoinedAtRef = useRef<number | null>(null);
   const xpIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageTime = useRef<number>(0);
   const toggleCallLockRef = useRef<boolean>(false);
@@ -413,13 +414,11 @@ export function useSessionEngine(
     }
   }, [stationId, isSpectator]);
 
-  const MAX_XP_PER_SESSION = 360; // 1 XP per real focus minute → allow up to 6 continuous hours per round.
-
   // Presence heartbeat + ghost cleanup timing (see effects below).
   const PRESENCE_HEARTBEAT_MS = 20000; // write my own "I'm alive" marker every 20s while joined
   const PRESENCE_STALE_MS = 120000;    // no heartbeat for 2 min → user is a ghost (closed the site)
   const SWEEP_INTERVAL_MS = 30000;     // how often a joined client re-checks the point room
-  const IDLE_HOST_KICK_MS = 20 * 60 * 1000; // host hands over after being idle (not running) for 20 min
+  const IDLE_HOST_KICK_MS = 30 * 60 * 1000; // leader idle (round not running) for 30 min → kicked out of the round
 
   const isHost = room ? ((room.hostId || room.creatorId) === user.uid || user.role === "admin") : false;
 
@@ -506,10 +505,22 @@ export function useSessionEngine(
         return;
       }
 
-      if (options.isPenalty && options.penaltyReason) {
-        // Collective/exit XP penalty removed by product decision — leaving the
-        // station no longer deducts XP. Fuel leak (per-user) is the only drain.
-        console.log("[Exit Engine] Exit penalty is disabled by design:", options.penaltyReason);
+      if (options.isPenalty && options.penaltyReason && (options.penaltyAmount || 0) < 0) {
+        // Exit penalty: leaving a station while its round is running costs -10 XP.
+        try {
+          await requestXpGrant(
+            userRef.current.uid,
+            userRef.current.fleetId,
+            null,
+            false,
+            options.penaltyAmount || -10,
+            "self_exit_penalty",
+            true,
+          );
+          showToast("غادرت خلال جولة نشطة — تم خصم 10 XP", "warning");
+        } catch (err) {
+          console.error("[Exit Engine] Failed to apply exit XP penalty:", err);
+        }
       }
 
       if (!options.skipFirebaseUpdate) {
@@ -631,6 +642,9 @@ export function useSessionEngine(
           participants: arrayUnion(userRef.current.uid),
           emptyAt: null,
         });
+        setDoc(doc(db, "rooms", stationId, "participants", userRef.current.uid), {
+          joinedAt: Date.now() + clockOffsetRef.current,
+        }).catch(() => {});
         setHasJoinedStation(true);
       }
     } catch (e) {
@@ -649,11 +663,14 @@ export function useSessionEngine(
         setHasJoinedStation(true);
         setIsJoined(true);
         try {
-          await updateDoc(roomRef, {
-            participants: arrayUnion(userRef.current.uid),
-            emptyAt: null,
-          });
-          await updateDoc(doc(db, "users", userRef.current.uid), {
+await updateDoc(roomRef, {
+          participants: arrayUnion(userRef.current.uid),
+          emptyAt: null,
+        });
+        setDoc(doc(db, "rooms", stationId, "participants", userRef.current.uid), {
+          joinedAt: Date.now() + clockOffsetRef.current,
+        }).catch(() => {});
+        await updateDoc(doc(db, "users", userRef.current.uid), {
             currentActivity: `في مدار محطة: ${roomSnapshotRef.current?.name || "خاصة"}`,
           });
         } catch (e) {}
@@ -687,7 +704,11 @@ export function useSessionEngine(
     }
     const presenceRef = doc(db, "rooms", stationId, "participants", user.uid);
     const beat = () => {
+      if (joinJoinedAtRef.current === null) {
+        joinJoinedAtRef.current = Date.now() + clockOffsetRef.current;
+      }
       setDoc(presenceRef, {
+        joinedAt: joinJoinedAtRef.current,
         lastSeenAt: Date.now() + clockOffsetRef.current,
         userName: (user.displayName || user.uid),
       }).catch(() => {});
@@ -724,9 +745,15 @@ export function useSessionEngine(
       getDocs(collection(db, "rooms", stationId, "participants"))
         .then((snap) => {
           const presence = new Map<string, number>();
+          const joinedAt = new Map<string, number>();
+          const nameById = new Map<string, string>();
           snap.docs.forEach((d: any) => {
-            const t = resolveStartTimeMs((d.data() as any)?.lastSeenAt ?? 0);
+            const data = d.data() || {};
+            const t = resolveStartTimeMs(data.lastSeenAt ?? 0);
             if (t && t > 0) presence.set(d.id, t);
+            const j = resolveStartTimeMs(data.joinedAt ?? 0);
+            if (j && j > 0) joinedAt.set(d.id, j);
+            if (data.userName) nameById.set(d.id, String(data.userName));
           });
 
           const participants = curRoom.participants || [];
@@ -740,6 +767,7 @@ export function useSessionEngine(
           const updates: any = {};
           let handoverMade = false;
           let myTakeover = false;
+          let kickedIdleHost: string | null = null;
 
           // Decide who should run the sweep's writes: the live host, or — when
           // no host is reachable — any active participant (self-healing).
@@ -755,17 +783,36 @@ export function useSessionEngine(
               !hostIsGhost &&
               idleSince > IDLE_HOST_KICK_MS;
 
+            // Active members eligible for leadership, ordered by join time
+            // ("مي دخل بعده" takes over when the leader is removed).
+            const activeCandidates = participants
+              .filter((p) => p !== currentHost && !ghostUids.includes(p))
+              .sort(
+                (a, b) =>
+                  (joinedAt.get(a) || 0) - (joinedAt.get(b) || 0)
+              );
+            const leaderJoinedAt = joinedAt.get(currentHost) || 0;
+            const takeoverCandidate =
+              activeCandidates.find(
+                (p) => (joinedAt.get(p) || 0) > leaderJoinedAt
+              ) || activeCandidates[0] || null;
+
             const shouldHandover = hostIsGhost || hostDropped || hostIsLazyIdle;
-            if (shouldHandover) {
-              const candidates = participants
-                .filter((p) => p !== currentHost && !ghostUids.includes(p))
-                .sort((a, b) => (presence.get(b) || 0) - (presence.get(a) || 0));
-              const nextHost = candidates[0] || (participants.length === 1 ? participants[0] : null);
-              if (nextHost) {
-                updates.hostId = nextHost;
-                handoverMade = true;
-                myTakeover = nextHost === user.uid;
-              }
+            const nextHost =
+              takeoverCandidate ||
+              (participants.length === 1 ? participants[0] : null);
+
+            // Requirement: a PRESENT leader who left the round off for 30 min
+            // is kicked out of the round entirely; the next person who joined
+            // after him takes over.
+            if (hostIsLazyIdle && activeCandidates.length > 0 && nextHost !== currentHost) {
+              kickedIdleHost = currentHost;
+            }
+
+            if (shouldHandover && nextHost && nextHost !== currentHost) {
+              updates.hostId = nextHost;
+              handoverMade = true;
+              myTakeover = nextHost === user.uid;
             }
           }
 
@@ -786,13 +833,15 @@ export function useSessionEngine(
             }
           }
 
-          if (ghostUids.length > 0) {
-            updates.participants = arrayRemove(...ghostUids);
+          const removeUids = [...ghostUids];
+          if (kickedIdleHost) removeUids.push(kickedIdleHost);
+          if (removeUids.length > 0) {
+            updates.participants = arrayRemove(...removeUids);
           }
 
           if (Object.keys(updates).length === 0) return;
 
-          const remaining = participants.filter((p) => !ghostUids.includes(p));
+          const remaining = participants.filter((p) => !removeUids.includes(p));
           if (remaining.length > 0) {
             updates.emptyAt = null;
           } else {
@@ -801,6 +850,18 @@ export function useSessionEngine(
           }
 
           return updateDoc(roomRef, updates).then(() => {
+            if (kickedIdleHost && remaining.length > 0 && updates.hostId) {
+              const kickedName = nameById.get(kickedIdleHost) || "أحد القادة";
+              const nextName = nameById.get(updates.hostId as string) || "عضو";
+              return addDoc(collection(db, "rooms", stationId, "messages"), {
+                text: `⏱️ القائد (${kickedName}) بقي في المحطة بدون تشغيل الجولة لمدة نصف ساعة — تم طرده، والقيادة الآن لـ (${nextName}).`,
+                userId: "system",
+                userName: "نظام التنبيه",
+                userPhoto: "",
+                timestamp: serverTimestamp(),
+                type: "text",
+              });
+            }
             if (ghostUids.length > 0 && remaining.length > 0) {
               return addDoc(collection(db, "rooms", stationId, "messages"), {
                 text: `👻 غادر ${ghostUids.length} المحطة تلقائياً (أغلقوا الموقع أو انقطعوا لا إرادياً).`,
@@ -1184,7 +1245,6 @@ export function useSessionEngine(
       if (sessionKey && focusSessionKeyRef.current !== sessionKey) {
         focusSessionKeyRef.current = sessionKey;
         lastXpUpdateTimeRef.current = null;
-        sessionXpCountRef.current = 0;
         afkFailCountRef.current = 0;
         afkTriggeredRef.current = new Set();
         afkScheduleRef.current = generateAfkSchedule((room?.timerDuration || 25) * 60);
@@ -1251,16 +1311,12 @@ export function useSessionEngine(
         Math.floor((now - lastGrant + 5000) / 60000),
       );
 
-      const maxAllowedXp = Math.max(
-        0,
-        MAX_XP_PER_SESSION - sessionXpCountRef.current,
-      );
-      let xpToGrant = Math.min(boundedMinutes, globalElapsedMinutes, maxAllowedXp);
+      // No per-session xp cap: keep earning 1 XP per real focus minute as long
+      // as the user keeps studying. globalElapsedMinutes still anti-farms.
+      let xpToGrant = Math.min(boundedMinutes, globalElapsedMinutes);
 
       const currentRoom = roomSnapshotRef.current;
       if (xpToGrant > 0 && currentRoom) {
-        sessionXpCountRef.current += xpToGrant;
-
         const result = await requestXpGrant(
           userRef.current.uid,
           userRef.current.fleetId,
@@ -1276,7 +1332,6 @@ export function useSessionEngine(
         if (result === -1 || result === 0) {
           // Blocked by cooldown (or no actual grant). Rollback state so we retry on subsequent ticks
           lastXpUpdateTimeRef.current = prevLastXpUpdateTime;
-          sessionXpCountRef.current -= xpToGrant;
           return 0;
         } else {
           lastXpGrantTimestampRef.current = now;
@@ -1504,8 +1559,7 @@ export function useSessionEngine(
               // no refund, no session stats, no challenge credit. The user chose
               // to watch instead of focus, and gets no progression for it.
               if (!isWatchingClassRef.current) {
-                const refund = remainingShieldRef.current > 0 ? remainingShieldRef.current : 0;
-                const safeXpEarned = Math.min(refund, Math.max(0, MAX_XP_PER_SESSION - sessionXpCountRef.current));
+                const safeXpEarned = remainingShieldRef.current > 0 ? remainingShieldRef.current : 0;
 
                 currentBetRef.current = 0;
                 remainingShieldRef.current = 0;
