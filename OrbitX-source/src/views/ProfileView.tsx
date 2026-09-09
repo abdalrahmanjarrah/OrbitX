@@ -46,7 +46,7 @@ import { cn } from "../lib/utils";
 import { showToast } from "../lib/cosmicUI";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
-import { getLevelFromXp, getLevelProgress, getLevelColor, getXpForLevel, getXpToNextLevel } from "../lib/levelConfig";
+import { getLevelFromXp, getLevelProgress, getLevelColor, getXpForLevel, getXpToNextLevel, getLevelRankName, getLevelUpReward, MILESTONE_LEVELS } from "../lib/levelConfig";
 
 export default function ProfileView({
   user,
@@ -289,6 +289,31 @@ export default function ProfileView({
   const levelColors = getLevelColor(userLevel);
   const levelProgress = getLevelProgress(user.xp, userLevel);
   const isAdminView = user.role === "admin";
+
+  // Upcoming milestone "ladder": the next few special levels ahead of the user,
+  // each showing its level badge, rank name, remaining XP and level-up reward.
+  const upcomingMilestones = (() => {
+    const list: {
+      level: number;
+      xpNeeded: number;
+      reward: number;
+      colors: ReturnType<typeof getLevelColor>;
+      rank: string;
+    }[] = [];
+    for (const lv of [...MILESTONE_LEVELS].sort((a, b) => a - b)) {
+      if (lv > userLevel) {
+        list.push({
+          level: lv,
+          xpNeeded: Math.max(0, getXpForLevel(lv) - (user.xp || 0)),
+          reward: getLevelUpReward(lv),
+          colors: getLevelColor(lv),
+          rank: getLevelRankName(lv),
+        });
+      }
+      if (list.length >= 4) break;
+    }
+    return list;
+  })();
 
   return (
     <div
@@ -666,7 +691,57 @@ export default function ProfileView({
                     className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow-[0_0_12px_rgba(251,191,36,0.5)]"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3 mt-6">
+
+                {/* Upcoming Milestone Ladder */}
+                {upcomingMilestones.length > 0 ? (
+                  <div className="mt-6" id="profile-milestone-ladder">
+                    <p className="text-[11px] font-bold text-gray-500 mb-2.5">
+                      المحطات الجاية في رحلتك
+                    </p>
+                    <div className="space-y-2.5">
+                      {upcomingMilestones.map((ms, i) => (
+                        <motion.div
+                          key={ms.level}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.2 + i * 0.08 }}
+                          className="flex items-center gap-3 p-3 rounded-2xl bg-black/30 border border-white/5 backdrop-blur-sm hover:border-white/15 transition-colors"
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white shrink-0 shadow-md ${ms.colors.bg}`}
+                          >
+                            {ms.level}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[13px] font-bold text-white truncate">
+                                {ms.rank}
+                              </span>
+                              {i === 0 && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 font-bold shrink-0">
+                                  التالي
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] font-mono text-gray-500 mt-0.5" dir="ltr">
+                              متبقي +{ms.xpNeeded.toLocaleString()} XP
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-lg whitespace-nowrap">
+                            هدية +{ms.reward}
+                          </span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 text-center py-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-sm font-black text-amber-300">وصلت لأعلى مستوى! 🏆</p>
+                    <p className="text-[11px] text-gray-500 mt-1">أنت في قمة الرحلة يا أسطورة.</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-3 mt-6" id="profile-journey-mini-stats">
                   {[
                     {
                       label: "سلسلة الأيام",

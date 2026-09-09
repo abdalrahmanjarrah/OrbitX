@@ -185,3 +185,16 @@ export function getLevelColor(level: number): { bg: string; text: string; glow: 
   if (level >= 10) return { bg: "bg-gradient-to-r from-blue-500 to-cyan-400", text: "text-white", glow: "shadow-[0_0_10px_rgba(59,130,246,0.3)]", border: "border-blue-400" };
   return { bg: "bg-gradient-to-r from-gray-500 to-gray-400", text: "text-white", glow: "", border: "border-gray-400" };
 }
+
+/**
+ * Arabic rank name for a level tier — used in the profile's
+ * "upcoming milestones" ladder.
+ */
+export function getLevelRankName(level: number): string {
+  if (level >= 100) return "أسطورة OrbitX";
+  if (level >= 75) return "أميرال المجرة";
+  if (level >= 50) return "قائد أسطول";
+  if (level >= 25) return "رائد الفضاء";
+  if (level >= 10) return "مستكشف";
+  return "متدرب فضائي";
+}
