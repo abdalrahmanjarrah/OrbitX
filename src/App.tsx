@@ -362,8 +362,7 @@ function App() {
             const isGuest = !!user.isAnonymous || !user.email;
             const isAdminEmail =
               user.email === "lumafashionhq@gmail.com" ||
-              user.email === "abdalrahmanjarrah94@gmail.com" ||
-              user.email === "abdalrahmanjarrah1@gmail.com";
+              user.email === "abdalrahmanjarrah94@gmail.com";
 
             const newUserData: UserData = {
               uid: user.uid,

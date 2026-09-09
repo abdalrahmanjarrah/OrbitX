@@ -30,8 +30,7 @@ service cloud.firestore {
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin') ||
         ('email' in request.auth.token && 
          (request.auth.token.email == "lumafashionhq@gmail.com" || 
-          request.auth.token.email == "abdalrahmanjarrah94@gmail.com" || 
-          request.auth.token.email == "abdalrahmanjarrah1@gmail.com") && 
+          request.auth.token.email == "abdalrahmanjarrah94@gmail.com") && 
          request.auth.token.email_verified == true)
       );
     }
@@ -235,7 +234,7 @@ service cloud.firestore {
                         // Admin Bootstrapping
                         (
                           request.resource.data.get('role', 'user') == 'admin' &&
-                          (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com" || request.auth.token.email == "abdalrahmanjarrah1@gmail.com") && 
+                          (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com") && 
                           request.auth.token.email_verified == true
                         )
                       ) &&
@@ -310,7 +309,7 @@ service cloud.firestore {
                         ) ||
                         (
                           request.resource.data.get('role', 'user') == 'admin' &&
-                          (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com" || request.auth.token.email == "abdalrahmanjarrah1@gmail.com") && 
+                          (request.auth.token.email == "lumafashionhq@gmail.com" || request.auth.token.email == "abdalrahmanjarrah94@gmail.com") && 
                           request.auth.token.email_verified == true
                         )
                       ) &&

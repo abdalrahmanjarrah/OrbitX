@@ -84,7 +84,7 @@ export const callRpc = async (fn: string, args: any) => {
 
 // Server-verified admin check (admins table), with graceful fallback to the
 // legacy hardcoded list while the security migration hasn't been applied yet.
-const ADMIN_EMAILS = ["lumafashionhq@gmail.com", "abdalrahmanjarrah94@gmail.com", "abdalrahmanjarrah1@gmail.com"];
+const ADMIN_EMAILS = ["lumafashionhq@gmail.com", "abdalrahmanjarrah94@gmail.com"];
 const adminEmailCache: Record<string, boolean> = {};
 export const isAdminUser = async (email?: string | null): Promise<boolean> => {
   if (!email) return false;
