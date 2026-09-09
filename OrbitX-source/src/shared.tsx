@@ -517,6 +517,7 @@ export interface Room {
   isChallenge?: boolean;
   challengeId?: string;
   challengeDurationMinutes?: number;
+  updatedAt?: any;
 }
 
 export interface Challenge {

@@ -23,6 +23,7 @@ import {
   updateDoc,
   deleteDoc,
   addDoc,
+  setDoc,
   runTransaction
 } from "../firebase";
 import { requestXpGrant } from "./xpSystem";
@@ -413,6 +414,13 @@ export function useSessionEngine(
   }, [stationId, isSpectator]);
 
   const MAX_XP_PER_SESSION = 360; // 1 XP per real focus minute → allow up to 6 continuous hours per round.
+
+  // Presence heartbeat + ghost cleanup timing (see effects below).
+  const PRESENCE_HEARTBEAT_MS = 20000; // write my own "I'm alive" marker every 20s while joined
+  const PRESENCE_STALE_MS = 120000;    // no heartbeat for 2 min → user is a ghost (closed the site)
+  const SWEEP_INTERVAL_MS = 30000;     // how often a joined client re-checks the point room
+  const IDLE_HOST_KICK_MS = 20 * 60 * 1000; // host hands over after being idle (not running) for 20 min
+
   const isHost = room ? ((room.hostId || room.creatorId) === user.uid || user.role === "admin") : false;
 
   // Sync stateful refs
@@ -664,6 +672,164 @@ export function useSessionEngine(
       }
     }
   }, [room?.participants, user.uid, isJoined, isSpectator, performSafeExit]);
+
+  // ---------------------------------------------------------------- Presence
+  // 1) Heartbeat: while joined, keep a per-user "I'm alive" doc under
+  //    rooms/{stationId}/participants/{uid} so other open clients (and this
+  //    engine's own sweep) can tell who actually left the site. Works through
+  //    the documents fallback, exactly like messages/typing.
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (isSpectator || !isJoined || !auth.currentUser) {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+      return;
+    }
+    const presenceRef = doc(db, "rooms", stationId, "participants", user.uid);
+    const beat = () => {
+      setDoc(presenceRef, {
+        lastSeenAt: Date.now() + clockOffsetRef.current,
+        userName: (user.displayName || user.uid),
+      }).catch(() => {});
+    };
+    beat();
+    heartbeatRef.current = setInterval(beat, PRESENCE_HEARTBEAT_MS);
+    return () => {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+      deleteDoc(presenceRef).catch(() => {});
+    };
+  }, [isJoined, isSpectator, stationId, user.uid]);
+
+  // 2) Ghost sweep + host handover, run while joined (not spectator):
+  //    - Removes participants whose heartbeat went stale (closed the site).
+  //    - Hands the host role over when the host is a ghost, OR when the host
+  //      kept the station idle (timer not running) for IDLE_HOST_KICK_MS.
+  //    - Resets a timer that was left running by an abandoned host (ancient
+  //      startTime) back to idle when this client is taking over the host role.
+  //    Writes are idempotent (arrayRemove / deterministic next-host sort), so
+  //    multiple clients sweeping at the same time can't corrupt the room.
+  const lastSweepAtRef = useRef(0);
+  useEffect(() => {
+    if (isSpectator || !isJoined || !auth.currentUser) return;
+    const sweep = () => {
+      const now = Date.now() + clockOffsetRef.current;
+      const curRoom = roomSnapshotRef.current;
+      if (!curRoom) return;
+      if (now - lastSweepAtRef.current < SWEEP_INTERVAL_MS) return;
+      lastSweepAtRef.current = now;
+
+      getDocs(collection(db, "rooms", stationId, "participants"))
+        .then((snap) => {
+          const presence = new Map<string, number>();
+          snap.docs.forEach((d: any) => {
+            const t = resolveStartTimeMs((d.data() as any)?.lastSeenAt ?? 0);
+            if (t && t > 0) presence.set(d.id, t);
+          });
+
+          const participants = curRoom.participants || [];
+          if (participants.length === 0) return;
+
+          const ghostUids = participants.filter(
+            (p) => p !== user.uid && now - (presence.get(p) || 0) > PRESENCE_STALE_MS
+          );
+
+          const currentHost = curRoom.hostId || curRoom.creatorId;
+          const updates: any = {};
+          let handoverMade = false;
+          let myTakeover = false;
+
+          // Decide who should run the sweep's writes: the live host, or — when
+          // no host is reachable — any active participant (self-healing).
+          if (currentHost) {
+            const hostIsGhost = ghostUids.includes(currentHost);
+            const hostDropped = !participants.includes(currentHost);
+            const lastRoomActivity =
+              resolveStartTimeMs(curRoom.updatedAt ?? curRoom.createdAt) || 0;
+            const idleSince =
+              curRoom.timerStatus === "idle" ? now - lastRoomActivity : 0;
+            const hostIsLazyIdle =
+              curRoom.timerStatus === "idle" &&
+              !hostIsGhost &&
+              idleSince > IDLE_HOST_KICK_MS;
+
+            const shouldHandover = hostIsGhost || hostDropped || hostIsLazyIdle;
+            if (shouldHandover) {
+              const candidates = participants
+                .filter((p) => p !== currentHost && !ghostUids.includes(p))
+                .sort((a, b) => (presence.get(b) || 0) - (presence.get(a) || 0));
+              const nextHost = candidates[0] || (participants.length === 1 ? participants[0] : null);
+              if (nextHost) {
+                updates.hostId = nextHost;
+                handoverMade = true;
+                myTakeover = nextHost === user.uid;
+              }
+            }
+          }
+
+          // A timer left running by an abandoned host: whoever takes the host
+          // role resets it to idle so the station is usable again, and doesn't
+          // inherit doomed focus/break cycles from an ancient startTime.
+          if (myTakeover && curRoom.timerStatus !== "idle" && curRoom.startTime) {
+            const start = resolveStartTimeMs(curRoom.startTime);
+            if (start !== null) {
+              const durMs =
+                (curRoom.timerStatus === "focus" ? curRoom.timerDuration : curRoom.breakDuration) *
+                60 *
+                1000;
+              if (now - start > durMs * 3 + 5 * 60 * 1000) {
+                updates.timerStatus = "idle";
+                updates.startTime = deleteField();
+              }
+            }
+          }
+
+          if (ghostUids.length > 0) {
+            updates.participants = arrayRemove(...ghostUids);
+          }
+
+          if (Object.keys(updates).length === 0) return;
+
+          const remaining = participants.filter((p) => !ghostUids.includes(p));
+          if (remaining.length > 0) {
+            updates.emptyAt = null;
+          } else {
+            updates.emptyAt = deleteField();
+            updates.timerStatus = "idle";
+          }
+
+          return updateDoc(roomRef, updates).then(() => {
+            if (ghostUids.length > 0 && remaining.length > 0) {
+              return addDoc(collection(db, "rooms", stationId, "messages"), {
+                text: `👻 غادر ${ghostUids.length} المحطة تلقائياً (أغلقوا الموقع أو انقطعوا لا إرادياً).`,
+                userId: "system",
+                userName: "نظام التنبيه",
+                userPhoto: "",
+                timestamp: serverTimestamp(),
+                type: "text",
+              });
+            }
+            if (handoverMade) {
+              return addDoc(collection(db, "rooms", stationId, "messages"), {
+                text: `🛰️ تم نقل قيادة المحطة إلى عضو نشط آخر تلقائياً.`,
+                userId: "system",
+                userName: "نظام التنبيه",
+                userPhoto: "",
+                timestamp: serverTimestamp(),
+                type: "text",
+              });
+            }
+            return undefined;
+          });
+        })
+        .catch(() => {});
+    };
+    sweep();
+    const sweepInterval = setInterval(sweep, SWEEP_INTERVAL_MS);
+    return () => clearInterval(sweepInterval);
+  }, [isJoined, isSpectator, stationId, user.uid]);
 
   // Main Room, Messaging and Typing Listeners
   useEffect(() => {
