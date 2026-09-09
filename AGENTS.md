@@ -1,5 +1,14 @@
 # Agent Communication & Execution Style
 
+## 0. Git & Pushing — THE DIRECT LINK (READ FIRST)
+- **This folder (`OrbitX-source`) is its own Git repository**, bound directly to the official GitHub repo.
+  `origin` = `https://github.com/abdalrahmanjarrah/OrbitX.git` — branch `main`. This is the ONLY correct target.
+- Before any push: `git -C <this_dir> remote -v` and `git -C <this_dir> status` must show `origin` → `OrbitX.git` and branch `main`.
+- Push flow: `git add -A && git commit -m "..." && git push origin main`.
+- NEVER use, point to, or push toward the old malformed repo `OrbitX..` (double dot). It is deprecated and inconsistent.
+- The parent folder (`New OpenCode Project`) is a DIFFERENT multi-project workspace repo — do not push project changes from there.
+- There are two sibling folders `OrbitX` (old built bundle) and `OrbitX-new` (old dev copy) — NOT under active development; ignore them unless the user says otherwise.
+
 ## 1. Dialect & Communication Style
 - **Accept Colloquial Arabic**: The user prefers to speak in casual, everyday Levantine-colloquial Arabic (اللهجة العامية).
 - **Proactive Interpretation**: When the user provides a casual or short requirement, do not ask for verbose technical specifications. Instead, act as a senior product builder and designer to automatically flesh out high-fidelity, polished, and production-ready implementations.
